@@ -53,9 +53,23 @@ jobs:
       - name: Print Kubeconfig content
         run: |
           cat $HOME/.kube/config
+
+           # Generate kubeconfig directly from OCI CLI
+          oci ce cluster create-kubeconfig \
+            --cluster-id $OKE_CLUSTER_ID \
+            --file $HOME/.kube/config \
+            --region $OCI_CLI_REGION \
+            --token-version 2.0.0 \
+            --kube-endpoint PUBLIC_ENDPOINT
+          
+          chmod 600 $HOME/.kube/config
+          
+          # Print kubeconfig without sensitive info for debugging
+          grep -v "token\|cert-data" $HOME/.kube/config
+          
           # Verify kubectl can connect to the cluster
           kubectl cluster-info
-          
+                   
           # Make sure we're in the right context
           kubectl config current-context
       - name: List k8s directory contents
