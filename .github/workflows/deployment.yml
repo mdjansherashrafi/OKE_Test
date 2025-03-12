@@ -50,6 +50,10 @@ jobs:
           mkdir -p $HOME/.kube
           echo "$KUBECONFIG_CONTENT" > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
+      - name: Print Kubeconfig content
+        run: |
+          cat $HOME/.kube/config
+
       - name: List k8s directory contents
         run: ls -alh k8s/
 
