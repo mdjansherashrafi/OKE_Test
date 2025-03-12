@@ -1,4 +1,4 @@
-name: Deploy PostgreSQL to OKE
+name: Deploy PostgreSQL to OKe
 
 on:
   push:
