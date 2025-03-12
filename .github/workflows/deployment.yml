@@ -53,7 +53,11 @@ jobs:
       - name: Print Kubeconfig content
         run: |
           cat $HOME/.kube/config
-
+          # Verify kubectl can connect to the cluster
+          kubectl cluster-info
+          
+          # Make sure we're in the right context
+          kubectl config current-context
       - name: List k8s directory contents
         run: ls -alh k8s/
 
