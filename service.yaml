@@ -1,0 +1,13 @@
+# service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: java-application
+  namespace: application
+spec:
+  selector:
+    app: java-application
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: LoadBalancer
