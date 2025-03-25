@@ -106,7 +106,7 @@ jobs:
       run: |
         export PATH=$PATH:$HOME/bin
         oci ce cluster create-kubeconfig --cluster-id $OKE_CLUSTER_ID --file ~/.kube/
-config --region $OCI_CLI_REGION --token-version 2.0.0"
+        config --region $OCI_CLI_REGION --token-version 2.0.0"
         chmod 600 ~/.kube/config
         
     - name: Setup kubectl and Helm
