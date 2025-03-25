@@ -124,7 +124,7 @@ jobs:
         
         # Replace image tag in Kubernetes deployment file
         sed -i ""s|IMAGE_NAME_PLACEHOLDER|${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:
-${{ github.sha }}|g" kubernetes/deployment.yaml"         
+        ${{ github.sha }}|g" kubernetes/deployment.yaml"         
           # Apply Kubernetes configurations
         kubectl apply -f kubernetes/namespace.yaml
         kubectl apply -f kubernetes/configmap.yaml
@@ -135,7 +135,7 @@ ${{ github.sha }}|g" kubernetes/deployment.yaml"
         # Verify deployment
         kubectl rollout status deployment/java-application -n application
 
-steps:
+        steps:
     - name: Checkout code
       uses: actions/checkout@v2
 
