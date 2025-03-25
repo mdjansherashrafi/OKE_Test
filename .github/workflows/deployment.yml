@@ -124,9 +124,8 @@ jobs:
         
         # Replace image tag in Kubernetes deployment file
         sed -i ""s|IMAGE_NAME_PLACEHOLDER|${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:
-${{ github.sha }}|g"" kubernetes/deployment.yaml"
-        
-        # Apply Kubernetes configurations
+${{ github.sha }}|g" kubernetes/deployment.yaml"         
+          # Apply Kubernetes configurations
         kubectl apply -f kubernetes/namespace.yaml
         kubectl apply -f kubernetes/configmap.yaml
         kubectl apply -f kubernetes/secrets.yaml
