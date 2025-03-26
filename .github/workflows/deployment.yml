@@ -101,7 +101,6 @@ jobs:
         mkdir -p ~/.ssh
         echo "$BASTION_SSH_PRIVATE_KEY" > ~/.ssh/bastion_key
         chmod 600 ~/.ssh/bastion_key
-        
         cat > ~/.ssh/config << EOF
         Host bastion
           HostName $BASTION_HOST_IP
@@ -109,27 +108,22 @@ jobs:
           IdentityFile ~/.ssh/bastion_key
           StrictHostKeyChecking no
         EOF
-        
     - name: Get Kubeconfig from OKE
       run: |
         export PATH=$PATH:$HOME/bin
         oci ce cluster create-kubeconfig --cluster-id $OKE_CLUSTER_ID --file ~/.kube/
         config --region $OCI_CLI_REGION --token-version 2.0.0
         chmod 600 ~/.kube/config
-        
     - name: Setup kubectl and Helm
       run: |
         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
         chmod +x kubectl
         sudo mv kubectl /usr/local/bin/
-        
-        curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
-        
+        curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash 
     - name: Deploy to OKE through Bastion
       run: |
         # Setup SSH tunnel through bastion for kubectl access
         ssh -fN -L 6443:${{ secrets.OKE_API_ENDPOINT }}:6443 bastion
-        
         # Replace image tag in Kubernetes deployment file 
         sed -i "s|IMAGE_NAME_PLACEHOLDER|${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }}|g" kubernetes/deployment.yaml
         # Apply Kubernetes configurations
