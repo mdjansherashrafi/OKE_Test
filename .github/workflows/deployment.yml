@@ -122,7 +122,7 @@ jobs:
         # Setup SSH tunnel through bastion for kubectl access
         ssh -fN -L 6443:${{ secrets.OKE_API_ENDPOINT }}:6443 bastion
         
-        # Replace image tag in Kubernetes deployment file
+        # Replace image tag in Kubernetes deployment file 
         sed -i "s|IMAGE_NAME_PLACEHOLDER|${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }}|g" kubernetes/deployment.yaml
         # Apply Kubernetes configurations
         kubectl apply -f kubernetes/namespace.yaml
