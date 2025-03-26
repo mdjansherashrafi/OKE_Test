@@ -49,7 +49,9 @@ jobs:
         run: |
          echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf > /dev/null
 
-      
+      - name: Verify Docker Daemon
+        run: docker info
+
       - name: Login to Docker Registry
         uses: docker/login-action@v2
         with:
