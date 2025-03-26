@@ -1,9 +1,9 @@
-on 
+on:
 
-push:
-  branches: [master]
-pull_request:
-  branches: [master]
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
 
 env:
   OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
