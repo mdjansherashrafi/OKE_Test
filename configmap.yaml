@@ -4,6 +4,7 @@ kind: ConfigMap
 metadata:
   name: java-application-config
   namespace: application
+
 data:
   application.properties: |
     server.port=8080
