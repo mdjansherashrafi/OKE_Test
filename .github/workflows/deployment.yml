@@ -1,9 +1,10 @@
-on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
-   
+on 
+
+push:
+  branches: [master]
+pull_request:
+  branches: [master]
+
 env:
   OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
   OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
@@ -20,7 +21,7 @@ env:
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
 jobs:
- build-and-deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -39,109 +40,109 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
         
-    - name: Build with Maven
-      run: mvn clean package -DskipTests
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
       
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
       
-    - name: Login to Docker Registry
-      uses: docker/login-action@v1
-      with:
-        registry: ${{ env.DOCKER_REGISTRY }}
-        username: ${{ env.DOCKER_USERNAME }}
-        password: ${{ env.DOCKER_PASSWORD }}
+      - name: Login to Docker Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
         
-    - name: Build and push optimized Docker image
-      uses: docker/build-push-action@v2
-      with:
-        context:
-        push: true
-        tags: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }}
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache-new
-        build-args: |
-          JAR_FILE=target/*.jar
+      - name: Build and push optimized Docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
+          build-args: |
+            JAR_FILE=target/*.jar
         
-    - name: Move cache
-      run: |
-        rm -rf /tmp/.buildx-cache
-        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
         
-    - name: Set up OCI CLI
-      run: |
-        mkdir -p ~/.oci
-        echo "$OCI_CLI_KEY_CONTENT" > ~/.oci/oci_api_key.pem
-        chmod 600 ~/.oci/oci_api_key.pem
+      - name: Set up OCI CLI
+        run: |
+          mkdir -p ~/.oci
+          echo "$OCI_CLI_KEY_CONTENT" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
         
-        cat > ~/.oci/config << EOF
-        [DEFAULT]
-        user=$OCI_CLI_USER
-        fingerprint=$OCI_CLI_FINGERPRINT
-        tenancy=$OCI_CLI_TENANCY
-        region=$OCI_CLI_REGION
-        key_file=~/.oci/oci_api_key.pem
-        EOF
+          cat > ~/.oci/config << EOF
+          [DEFAULT]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=~/.oci/oci_api_key.pem
+          EOF
         
-        curl -L -O https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh
-        chmod +x install.sh
-        ./install.sh --accept-all-defaults
+          curl -L -O https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh
+          chmod +x install.sh
+          ./install.sh --accept-all-defaults
         
-    - name: Setup SSH for Bastion Host
-      run: |
-        mkdir -p ~/.ssh
-        echo "$BASTION_SSH_PRIVATE_KEY" > ~/.ssh/bastion_key
-        chmod 600 ~/.ssh/bastion_key
+      - name: Setup SSH for Bastion Host
+        run: |
+          mkdir -p ~/.ssh
+          echo "$BASTION_SSH_PRIVATE_KEY" > ~/.ssh/bastion_key
+          chmod 600 ~/.ssh/bastion_key
         
-        cat > ~/.ssh/config << EOF
-        Host bastion
-          HostName $BASTION_HOST_IP
-          User $BASTION_USER
-          IdentityFile ~/.ssh/bastion_key
-          StrictHostKeyChecking no
-        EOF
+          cat > ~/.ssh/config << EOF
+          Host bastion
+            HostName $BASTION_HOST_IP
+            User $BASTION_USER
+            IdentityFile ~/.ssh/bastion_key
+            StrictHostKeyChecking no
+          EOF
         
-    - name: Get Kubeconfig from OKE
-      run: |
-        export PATH=$PATH:$HOME/bin
-        oci ce cluster create-kubeconfig --cluster-id $OKE_CLUSTER_ID --file ~/.kube/config --region $OCI_CLI_REGION --token-version 2.0.0
-        chmod 600 ~/.kube/config
+      - name: Get Kubeconfig from OKE
+        run: |
+          export PATH=$PATH:$HOME/bin
+          oci ce cluster create-kubeconfig --cluster-id $OKE_CLUSTER_ID --file ~/.kube/config --region $OCI_CLI_REGION --token-version 2.0.0
+          chmod 600 ~/.kube/config
         
-    - name: Setup kubectl and Helm
-      run: |
-        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-        chmod +x kubectl
-        sudo mv kubectl /usr/local/bin/
-        
-        curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
-        
-    - name: Deploy to OKE through Bastion
-      run: |
-        # Setup SSH tunnel through bastion for kubectl access
-        ssh -fN -L 6443:${{ secrets.OKE_API_ENDPOINT }}:6443 bastion
-        
-        # Replace image tag in Kubernetes deployment file
-        sed -i "s|IMAGE_NAME_PLACEHOLDER|${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }}|g" kubernetes/deployment.yaml
-        
-        kubectl apply -f kubernetes/namespace.yaml
-        kubectl apply -f kubernetes/configmap.yaml
-        kubectl apply -f kubernetes/secrets.yaml
-        kubectl apply -f kubernetes/deployment.yaml
-        kubectl apply -f kubernetes/service.yaml
-        
-        # Verify deployment
-        kubectl rollout status deployment/java-application -n application
+      - name: Setup kubectl and Helm
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+          
+          curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+          
+      - name: Deploy to OKE through Bastion
+        run: |
+          # Setup SSH tunnel through bastion for kubectl access
+          ssh -fN -L 6443:${{ secrets.OKE_API_ENDPOINT }}:6443 bastion
+          
+          # Replace image tag in Kubernetes deployment file
+          sed -i "s|IMAGE_NAME_PLACEHOLDER|${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}:${{ github.sha }}|g" kubernetes/deployment.yaml
+          
+          kubectl apply -f kubernetes/namespace.yaml
+          kubectl apply -f kubernetes/configmap.yaml
+          kubectl apply -f kubernetes/secrets.yaml
+          kubectl apply -f kubernetes/deployment.yaml
+          kubectl apply -f kubernetes/service.yaml
+          
+          # Verify deployment
+          kubectl rollout status deployment/java-application -n application
 
-    - name: Download and install SonarQube Scanner
-      run: |
-        curl -sSLo sonar-scanner-cli.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.6.2.2472-linux.zip
-        unzip sonar-scanner-cli.zip
-        export PATH=$PATH:$(pwd)/sonar-scanner-4.6.2.2472-linux/bin
+      - name: Download and install SonarQube Scanner
+        run: |
+          curl -sSLo sonar-scanner-cli.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.6.2.2472-linux.zip
+          unzip sonar-scanner-cli.zip
+          export PATH=$PATH:$(pwd)/sonar-scanner-4.6.2.2472-linux/bin
         
-    - name: Run SonarQube analysis
-      run: |
-        sonar-scanner \
-          -Dsonar.projectKey=my-project-key \
-          -Dsonar.sources=. \
-          -Dsonar.host.url=${{ env.SONAR_HOST_URL }} \
-          -Dsonar.login=${{ env.SONAR_TOKEN }}
+      - name: Run SonarQube analysis
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=my-project-key \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=${{ env.SONAR_HOST_URL }} \
+            -Dsonar.login=${{ env.SONAR_TOKEN }}
