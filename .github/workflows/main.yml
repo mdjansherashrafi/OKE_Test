@@ -26,13 +26,14 @@ jobs:
 
     - name: Set up OCI config and key
       run: |
-        mkdir -p ~/.oci
-        echo "$OCI_CONFIG" > ~/.oci/config
-        echo "$OCI_PRIVATE_KEY" > ~/.oci/oci_api_key.pem
-        chmod 600 ~/.oci/oci_api_key.pem ~/.oci/config
+       mkdir -p ~/.oci
+       echo "$OCI_CONFIG" > ~/.oci/config
+       echo "$OCI_PRIVATE_KEY" > ~/.oci/oci_api_key.pem
+       chmod 600 ~/.oci/config ~/.oci/oci_api_key.pem
       env:
-        OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
-        OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+       OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
+       OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+
 
     - name: Start OCI Bastion Port Forward Session
       id: bastion
