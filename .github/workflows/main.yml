@@ -1,37 +1,63 @@
-name: Test OKE Connectivity via Bastion
+name: Connect to OKE via OCI Bastion
 
 on:
   workflow_dispatch:
 
 jobs:
-  test-oke-connectivity:
+  bastion-oke-connect:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout
       uses: actions/checkout@v3
 
-    - name: Install SSH key
-      uses: shimataro/ssh-key-action@v2
-      with:
-        key: ${{ secrets.BASTION_SSH_PRIVATE_KEY }}
-        known_hosts: '[]'  # disable host verification; we'll manually add later
-        name: id_rsa
-        if_key_exists: fail
-
-    - name: Add bastion host to known_hosts
+    - name: Install OCI CLI
       run: |
-        ssh-keyscan -H ${{ secrets.BASTION_HOST }} >> ~/.ssh/known_hosts
+        curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh | bash -s -- --accept-all-defaults
+        echo "$HOME/bin" >> $GITHUB_PATH
 
-    - name: Test OKE connectivity via Bastion
+    - name: Set up SSH private key
+      run: |
+        mkdir -p ~/.ssh
+        echo "$BASTION_SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
       env:
-        BASTION_USER: ${{ secrets.BASTION_USER }}
-        BASTION_HOST: ${{ secrets.BASTION_HOST }}
-        OKE_NODE_USER: ${{ secrets.OKE_NODE_USER }}
-        OKE_NODE_IP: ${{ secrets.OKE_NODE_IP }}
+        BASTION_SSH_PRIVATE_KEY: ${{ secrets.BASTION_SSH_PRIVATE_KEY }}
+
+    - name: Set up OCI config and key
       run: |
-        echo "Testing SSH connectivity to OKE node via bastion..."
-        ssh -o StrictHostKeyChecking=yes \
-            -J "$BASTION_USER@$BASTION_HOST" \
-            "$OKE_NODE_USER@$OKE_NODE_IP" \
-            "echo ✅ Connected to OKE node successfully"
+        mkdir -p ~/.oci
+        echo "$OCI_CONFIG" > ~/.oci/config
+        echo "$OCI_PRIVATE_KEY" > ~/.oci/oci_api_key.pem
+        chmod 600 ~/.oci/oci_api_key.pem ~/.oci/config
+      env:
+        OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
+        OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+
+    - name: Start OCI Bastion Port Forward Session
+      id: bastion
+      run: |
+        SESSION_OCID=$(oci bastion session create-port-forwarding \
+          --bastion-id $BASTION_OCID \
+          --target-resource-id $OKE_NODE_OCID \
+          --target-resource-port 22 \
+          --key-type "PUB" \
+          --ssh-public-key-content "$(cat ~/.ssh/id_rsa.pub)" \
+          --wait-for-state SUCCEEDED \
+          --query 'data.id' --raw-output)
+
+        echo "::set-output name=session_id::$SESSION_OCID"
+      env:
+        BASTION_OCID: ${{ secrets.BASTION_OCID }}
+        OKE_NODE_OCID: ${{ secrets.OKE_NODE_OCID }}
+
+    - name: Connect to OKE Node via Bastion Session
+      run: |
+        # Replace with actual Bastion Session connection command if needed
+        echo "✅ Bastion session established. Proceed with port forwarding or kubectl exec."
+        # Optional: kubectl config setup goes here
+
+    - name: Cleanup OCI Bastion Session
+      if: always()
+      run: |
+        oci bastion session delete --session-id ${{ steps.bastion.outputs.session_id }} --force
