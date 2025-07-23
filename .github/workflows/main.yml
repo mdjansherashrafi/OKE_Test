@@ -6,25 +6,27 @@ on:
 jobs:
   test-oke-connectivity:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Install SSH client
-        run: sudo apt-get update && sudo apt-get install -y openssh-client
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Test OKE Connectivity via Bastion
-        env:
-          BASTION_HOST: ${{ secrets.BASTION_HOST }}
-          BASTION_USER: ${{ secrets.BASTION_USER }}
-          BASTION_KEY: ${{ secrets.BASTION_KEY }}
-          OKE_INTERNAL_IP: ${{ secrets.OKE_INTERNAL_IP }}
-        run: |
-          # Write private key to a file
-          echo "$BASTION_KEY" > bastion.key
-          chmod 600 bastion.key
+    - name: Install SSH key
+      uses: shimataro/ssh-key-action@v2
+      with:
+        key: ${{ secrets.BASTION_SSH_PRIVATE_KEY }}
+        known_hosts: ${{ secrets.BASTION_KNOWN_HOSTS }}
 
-          # Test SSH to OKE via Bastion
-          ssh -o StrictHostKeyChecking=no \
-              -i bastion.key \
-              -J "${BASTION_USER}@${BASTION_HOST}" \
-              "${BASTION_USER}@${OKE_INTERNAL_IP}" \
-              "echo 'OKE connectivity test successful!'"
+    - name: Test OKE connectivity via bastion
+      run: |
+        # Test basic SSH connectivity to bastion
+        ssh -o StrictHostKeyChecking=no \
+            -J ${{ secrets.BASTION_USER }}@${{ secrets.BASTION_HOST }} \
+            ${{ secrets.OKE_NODE_USER }}@${{ secrets.OKE_NODE_IP }} \
+            "echo 'Successfully connected to OKE node via bastion'"
+        
+        # Test kubectl connectivity via bastion (if configured)
+        ssh -o StrictHostKeyChecking=no \
+            ${{ secrets.BASTION_USER }}@${{ secrets.BASTION_HOST }} \
+            "kubectl --kubeconfig ${{ secrets.KUBECONFIG_PATH }} get nodes && \
+             echo 'Successfully connected to OKE cluster via bastion'"
