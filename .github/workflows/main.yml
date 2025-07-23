@@ -32,5 +32,3 @@ jobs:
         echo "Testing SSH connectivity to OKE node via bastion..."
         ssh -o StrictHostKeyChecking=no \
             -J "${{ secrets.BASTION_USER }}@${{ secrets.BASTION_HOST }}" \
-           
-
