@@ -49,5 +49,5 @@ jobs:
        --query 'data.id' --raw-output)
         echo "session_id=$SESSION_OCID" >> "$GITHUB_OUTPUT"
     env:
-     BASTION_OCID: ${{ secrets.BASTION_OCID }}
-     OKE_NODE_OCID: ${{ secrets.OKE_NODE_OCID }}
+     BASTION_OCID: ${{ secrets.BASTION_HOST }}
+     OKE_NODE_OCID: ${{ secrets.OKE_IP_ADDRESS }}
