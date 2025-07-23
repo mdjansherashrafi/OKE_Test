@@ -15,6 +15,7 @@ jobs:
         with:
           fetch-depth: 0
 
+
 # Check if kubeseal, kubeval, gomplate, kube-score, oci present in worker cache
       - name: kubeseal, kubeval, gomplate, kube-score, oci cache
         id: kubeseal-kubeval-gomplate-kubescore-oci-cache
