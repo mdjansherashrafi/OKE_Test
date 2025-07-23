@@ -41,8 +41,7 @@ jobs:
           ENV_INSTALL_GOMPLATE: true
           ENV_INSTALL_KUBESCORE: true
           ENV_INSTALL_OCI: true
-        run: |
-          ./install-dependencies.sh
+     
       - name: Lint k8s, kubescore tests, kubeval tests, Yaml validations on PR
         run: |
           ENV_VALIDATE_SEALED_SECRETS_ENABLED=false ENV_VALIDATE_YAML_FILE_REFERENCES_IN_KUSTOMIZATION=true ./.github/workflows/lint-k8s-manifests.sh        
