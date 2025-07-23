@@ -1,5 +1,5 @@
   
-name: Kubernetes lint manifests
+name: connection test oke
 
 on:
   push:
