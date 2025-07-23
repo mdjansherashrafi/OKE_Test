@@ -19,16 +19,18 @@ jobs:
         name: id_rsa
         if_key_exists: fail
 
+    # Optional: Remove this if you don't want secrets echoed
     - name: Debug secret values (Optional)
       run: |
         echo "BASTION_USER=${{ secrets.BASTION_USER }}"
         echo "BASTION_HOST=${{ secrets.BASTION_HOST }}"
         echo "OKE_NODE_USER=${{ secrets.OKE_NODE_USER }}"
         echo "OKE_NODE_IP=${{ secrets.OKE_NODE_IP }}"
-      # Remove or mask this step if secrets should not be displayed
 
     - name: Test OKE connectivity via bastion
       run: |
         echo "Testing SSH connectivity to OKE node via bastion..."
         ssh -o StrictHostKeyChecking=no \
             -J "${{ secrets.BASTION_USER }}@${{ secrets.BASTION_HOST }}" \
+            "${{ secrets.OKE_NODE_USER }}@${{ secrets.OKE_NODE_IP }}" \
+            "echo Connected to OKE node"
