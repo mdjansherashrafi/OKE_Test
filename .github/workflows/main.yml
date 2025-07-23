@@ -62,9 +62,7 @@ jobs:
           echo "$KUBECONFIG_FILE" > ~/.kube/config
           chmod 400 ~/.oci/key ~/.oci/config ~/.ssh/bastion
           - name: Debug bastion connectivity
-        run: |
-         ping -c 4 ${{ secrets.BASTION_IP_ADDRESS }} || true
-         nc -zv ${{ secrets.BASTION_IP_ADDRESS }} 22 || true
+          
           # Debug SSH connection
           ssh -v -o StrictHostKeyChecking=no -i ~/.ssh/bastion opc@${{ secrets.BASTION_KEY }} exit
           ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -f -n opc@${{ secrets.BASTION_IP_ADDRESS }} -i ~/.ssh/bastion -N -L 6443:${{ secrets.OKE_IP_ADDRESS }}:6443 sleep 900
