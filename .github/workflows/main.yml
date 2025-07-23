@@ -15,7 +15,7 @@ jobs:
       uses: shimataro/ssh-key-action@v2
       with:
         key: ${{ secrets.BASTION_SSH_PRIVATE_KEY }}
-        known_hosts: ${{ secrets.BASTION_KNOWN_HOSTS }}
+        known_hosts: ${{ secrets.BASTION_HOSTS }}
 
     - name: Test OKE connectivity via bastion
       run: |
