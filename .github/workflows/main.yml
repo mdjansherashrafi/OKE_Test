@@ -1,22 +1,22 @@
-  
 name: connection test oke
 
 on:
   push:
     branches:
       - "master"
+
 jobs:
   lint_k8s:
     runs-on: ubuntu-24.04
     environment: nonprod
-    name: Lint k8s, kubescore tests, kubeval tests on PR  Workflow
+    name: Connection test to OKE from GitHub Actions
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-
-# Check if kubeseal, kubeval, gomplate, kube-score, oci present in worker cache
+      # Check if required binaries are cached
       - name: kubeseal, kubeval, gomplate, kube-score, oci cache
         id: kubeseal-kubeval-gomplate-kubescore-oci-cache
         uses: actions/cache@v4
@@ -30,9 +30,8 @@ jobs:
             ~/bin/oci
           key: kubeseal-kubeval-gomplate-kubescore-oci-cache-key
 
-## kubeseal, kubeval, gomplate, kube-score, oci installation
-#  Install kubeseal if was not found in cache
-      - name: install kubeseal, kubeval, gomplate, kube-score, oci
+      # Install binaries if not found in cache
+      - name: Install kubeseal, kubeval, gomplate, kube-score, oci
         if: steps.kubeseal-kubeval-gomplate-kubescore-oci-cache.outputs.cache-hit != 'true'
         working-directory: .github/workflows
         env:
@@ -41,7 +40,11 @@ jobs:
           ENV_INSTALL_GOMPLATE: true
           ENV_INSTALL_KUBESCORE: true
           ENV_INSTALL_OCI: true
-            
+        run: |
+          chmod +x install-dependencies.sh
+          ./install-dependencies.sh
+
+      # Configure secrets and test Bastion/OKE connectivity
       - name: k8s secrets validation non prod
         env:
           BASTION_KEY: ${{ secrets.BASTION_KEY }}
@@ -51,17 +54,20 @@ jobs:
           BASTION_IP_ADDRESS: ${{ secrets.BASTION_IP_ADDRESS }}
           OKE_IP_ADDRESS: ${{ secrets.OKE_IP_ADDRESS }}
         run: |
-          ## Installation of binaries, set up .ssh and .kube dir
+          # Setup OCI config and SSH
           mkdir -p ~/.oci/ ~/.ssh/ ~/.kube/
           echo "$OCI_CONFIG" > ~/.oci/config
           echo "$OCI_KEY" > ~/.oci/key
           echo "$BASTION_KEY" > ~/.ssh/bastion
           echo "$KUBECONFIG_FILE" > ~/.kube/config
           chmod 400 ~/.oci/key ~/.oci/config ~/.ssh/bastion
-          - name: Debug bastion connectivity
-          
-          # Debug SSH connection
-          ssh -v -o StrictHostKeyChecking=no -i ~/.ssh/bastion opc@${{ secrets.BASTION_KEY }} exit
-          ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -f -n opc@${{ secrets.BASTION_IP_ADDRESS }} -i ~/.ssh/bastion -N -L 6443:${{ secrets.OKE_IP_ADDRESS }}:6443 sleep 900
-          
-    
+
+          # Start SSH tunnel to OKE
+          ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -f -n \
+            -i ~/.ssh/bastion \
+            opc@${BASTION_IP_ADDRESS} \
+            -N -L 6443:${OKE_IP_ADDRESS}:6443 sleep 900
+
+      - name: Debug bastion connectivity
+        run: |
+          ssh -v -o StrictHostKeyChecking=no -i ~/.ssh/bastion opc@${{ secrets.BASTION_IP_ADDRESS }} exit
