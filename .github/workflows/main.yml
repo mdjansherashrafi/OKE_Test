@@ -5,10 +5,6 @@ on:
   push:
     branches:
       - "master"
-
-  check_suite:
-    types:
-      - completed
 jobs:
   lint_k8s:
     runs-on: ubuntu-24.04
