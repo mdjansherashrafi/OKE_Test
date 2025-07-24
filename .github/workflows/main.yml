@@ -5,11 +5,19 @@ on:
 
 jobs:
   bastion-oke-connect:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
+    - name: Check environment variables
+      run: |
+         echo "BASTION_OCID=$BASTION_OCID"
+         echo "OKE_NODE_OCID=$OKE_NODE_OCID"
+          if [[ -z "$BASTION_OCID" || -z "$OKE_NODE_OCID" ]]; then
+            echo "ERROR: Required environment variables are missing."
+            exit 2
+          fi
 
     - name: Install OCI CLI
       run: |
