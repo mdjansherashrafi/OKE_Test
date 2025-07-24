@@ -57,7 +57,7 @@ jobs:
         --target-resource-id "$OKE_NODE_OCID" \
         --target-port 22 \
         --key-type "PUB" \
-        --ssh-public-key-content "$(cat ~/.ssh/id_rsa.pub)" \
+        --ssh-public-key-file ~/.ssh/id_rsa.pub
         --wait-for-state SUCCEEDED \
         --query 'data.id' --raw-output --debug)
          echo "session_id=$SESSION_OCID" >> "$GITHUB_OUTPUT"
