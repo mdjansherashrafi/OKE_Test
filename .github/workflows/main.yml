@@ -1,68 +1,59 @@
 name: Test OKE Connectivity via Bastion
 
 on:
-  push:
-    branches:
-      - main  # Run this workflow on every push to the main branch
-  workflow_dispatch:  # Allows manual triggering of the workflow from the GitHub UI
+  workflow_dispatch:
 
 jobs:
-  test-oke-connectivity:
-    runs-on: ubuntu-latest
+  bastion-connectivity:
+    runs-on: ubuntu-24.04
+
+    env:
+      BASTION_OCID: ${{ secrets.BASTION_OCID }}
+      OKE_NODE_OCID: ${{ secrets.OKE_NODE_OCID }}
 
     steps:
-      # Step 1: Checkout the repository
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      # Step 2: Set up OCI CLI
-      - name: Set up OCI CLI
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-pip
-          pip3 install oci-cli
+    - name: Set up OCI CLI
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y unzip python3-pip
+        pip3 install oci-cli
 
-      # Step 3: Export environment variables from GitHub Secrets
-      - name: Export OCI secrets and configure environment
-        run: |
-          echo "BASTION_OCID=${{ secrets.BASTION_OCID }}" >> $GITHUB_ENV
-          echo "OKE_NODE_OCID=${{ secrets.OKE_NODE_OCID }}" >> $GITHUB_ENV
-          echo "OCI_CONFIG_FILE=${{ secrets.OCI_CONFIG_FILE }}" >> $GITHUB_ENV
-          echo "OCI_API_KEY=${{ secrets.OCI_API_KEY }}" >> $GITHUB_ENV
+    - name: Configure OCI CLI credentials
+      run: |
+        mkdir -p ~/.oci
+        echo "${{ secrets.OCI_CONFIG_FILE }}" > ~/.oci/config
+        echo "${{ secrets.OCI_API_KEY }}" > ~/.oci/oci_api_key.pem
+        chmod 600 ~/.oci/oci_api_key.pem
+        chmod 600 ~/.oci/config
+        echo "OCI CLI configured successfully"
 
-      # Step 4: Set up SSH key for the bastion connection
-      - name: Set up SSH keys
-        run: |
-         mkdir -p ~/.ssh
-         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-         chmod 600 ~/.ssh/id_rsa
-         ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub
-          
-      # Step 5: Create a port forwarding session through Bastion
-      - name: Create Port-Forwarding Session via Bastion
-        run: |
-          oci bastion session create-port-forwarding \
-            --bastion-id "$BASTION_OCID" \
-            --target-resource-id "$OKE_NODE_OCID" \
-            --target-port 22 \
-            --ssh-public-key-file ~/.ssh/id_rsa.pub \
-            --key-type PUB \
-            --wait-for-state SUCCEEDED \
-            --query data.id \
-            --raw-output
-          
-      # Step 6: Test Connectivity to OKE node
-      - name: Test OKE Connectivity
-        run: |
-          # Set up port forwarding for kubectl access
-          kubectl config set-cluster oci-cluster --server=https://$OKE_NODE_OCID --insecure-skip-tls-verify=true
-          kubectl config set-context oci-context --cluster=oci-cluster
-          kubectl config use-context oci-context
-          
-          # Test connectivity by listing nodes in the OKE cluster
-          kubectl get nodes || exit 1
+    - name: Check if secrets are available
+      run: |
+        if [[ -z "$BASTION_OCID" || -z "$OKE_NODE_OCID" ]]; then
+          echo "ERROR: Missing environment variables."
+          exit 1
+        fi
+        echo "Secrets look good. Proceeding..."
 
-      # Step 7: Clean up the port forwarding session
-      - name: Clean up Port-Forwarding Session
-        run: |
-          oci bastion session terminate --session-id $(oci bastion session list --bastion-id "$BASTION_OCID" --query 'data[0].id' --raw-output)
+    - name: Generate temporary SSH keypair
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keygen -t rsa -b 2048 -N "" -f ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+
+    - name: Create port-forwarding session via OCI Bastion
+      id: port-forward
+      run: |
+        SESSION_OCID=$(oci bastion session create-port-forwarding \
+          --bastion-id "$BASTION_OCID" \
+          --target-resource-id "$OKE_NODE_OCID" \
+          --target-port 22 \
+          --ssh-public-key-file ~/.ssh/id_rsa.pub \
+          --wait-for-state SUCCEEDED \
+          --query "data.id" \
+          --raw-output)
+
+        echo "SESSION_OCID=$SES_
