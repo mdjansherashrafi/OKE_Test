@@ -33,10 +33,10 @@ jobs:
       # Step 4: Set up SSH key for the bastion connection
       - name: Set up SSH keys
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub
+         mkdir -p ~/.ssh
+         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+         chmod 600 ~/.ssh/id_rsa
+         ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub
           
       # Step 5: Create a port forwarding session through Bastion
       - name: Create Port-Forwarding Session via Bastion
