@@ -55,7 +55,7 @@ jobs:
        SESSION_OCID=$(oci bastion session create-port-forwarding \
         --bastion-id "$BASTION_OCID" \
         --target-resource-id "$OKE_NODE_OCID" \
-        --target-resource-port 22 \
+        --target-port 22 \
         --key-type "PUB" \
         --ssh-public-key-content "$(cat ~/.ssh/id_rsa.pub)" \
         --wait-for-state SUCCEEDED \
