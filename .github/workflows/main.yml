@@ -46,24 +46,17 @@ jobs:
     - name: Debug OCI Config
       run: |
        cat ~/.oci/config
-
-    - name: Start OCI Bastion Port Forward Session
-      id: bastion
-      run: |
-       set -xe
-       echo "BASTION_OCID=$BASTION_OCID"
-       echo "OKE_NODE_OCID=$OKE_NODE_OCID"
-       ls -l ~/.ssh/id_rsa*
-       cat ~/.ssh/id_rsa.pub
-       SESSION_OCID=$(oci bastion session create-port-forwarding \
-        --bastion-id "$BASTION_OCID" \
-        --target-resource-id "$OKE_NODE_OCID" \
-        --target-port 22 \
-        --key-type "PUB" \
-        --ssh-public-key-file ~/.ssh/id_rsa.pub
-        --wait-for-state SUCCEEDED \
-        --query 'data.id' --raw-output --debug)
-         echo "session_id=$SESSION_OCID" >> "$GITHUB_OUTPUT"
+       
+       oci bastion session create-port-forwarding \
+       --bastion-id "$BASTION_OCID" \
+       --target-resource-id "$OKE_NODE_OCID" \
+       --target-port 22 \
+       --ssh-public-key-file /home/runner/.ssh/id_rsa.pub \
+       --key-type PUB \
+       --wait-for-state SUCCEEDED \
+       --query data.id \
+       --raw-output
+ 
     env:
      BASTION_OCID: ${{ secrets.BASTION_HOST }}
      OKE_NODE_OCID: ${{ secrets.OKE_IP_ADDRESS }}
