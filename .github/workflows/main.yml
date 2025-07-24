@@ -43,6 +43,9 @@ jobs:
       env:
         OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
         OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+    - name: Debug OCI Config
+      run: |
+       cat ~/.oci/config
 
     - name: Start OCI Bastion Port Forward Session
       id: bastion
