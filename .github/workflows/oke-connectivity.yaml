@@ -45,16 +45,16 @@ jobs:
       run: |
        cat ~/.oci/config
        
-       oci bastion session create-port-forwarding \
-       --bastion-id "$BASTION_OCID" \
-       --target-resource-id "$OKE_NODE_OCID" \
-       --target-port 22 \
-       --ssh-public-key-file /home/runner/.ssh/id_rsa.pub \
-       --key-type PUB \
-       --wait-for-state SUCCEEDED \
-       --query data.id \
-       --raw-output
-       --debug
+       echo "Creating Bastion port-forwarding session..."
+        oci bastion session create-port-forwarding \
+        --bastion-id "$BASTION_OCID" \
+        --target-resource-id "$OKE_NODE_OCID" \
+        --target-port 22 \
+        --ssh-public-key-file ~/.ssh/id_rsa.pub \
+        --wait-for-state SUCCEEDED \
+        --query "data.id" \
+        --raw-output \
+        --debug
  
     env:
      BASTION_OCID: ${{ secrets.BASTION_HOST }}
