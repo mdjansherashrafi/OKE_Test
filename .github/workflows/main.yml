@@ -55,5 +55,6 @@ jobs:
           --wait-for-state SUCCEEDED \
           --query "data.id" \
           --raw-output)
+          --debug
 
         echo "SESSION_OCID=$SES_
