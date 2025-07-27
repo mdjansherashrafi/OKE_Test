@@ -34,14 +34,14 @@ jobs:
     - name: Add Bastion SSH Key
       run: |
         mkdir -p ~/.ssh
-        echo "${{ secrets.BASTION_SSH_PRIVATE_KEY }}" > ~/.ssh/bastion_ssh_key
-        chmod 600 ~/.ssh/bastion_ssh_key
+        echo "${{ secrets.BASTION_SSH_PRIVATE_KEY }}" > ~/.ssh/bastion_key/oci_bastion_key
+        chmod 600 ~/.ssh/bastion_key/oci_bastion_key
 
     - name: Start Bastion Session and Connect to OKE Node
       run: |
        sudo apt-get install -y jq
        # Validate SSH private key and extract public key
-        SSH_PUBLIC_KEY=$(ssh-keygen -y -f ~/.ssh/bastion_ssh_key 2>/dev/null)
+        SSH_PUBLIC_KEY=$(ssh-keygen -y -f ~/.ssh/bastion_key/oci_bastion_key 2>/dev/null)
         if [[ -z "$SSH_PUBLIC_KEY" ]]; then
          echo "ERROR: Invalid Bastion SSH private key."
          exit 2
@@ -51,7 +51,7 @@ jobs:
        --target-resource-type "instance" \
        --target-resource-id $OKE_NODE_OCID \
        --session-type "SSH" \
-       --ssh-public-key "$(ssh-keygen -y -f ~/.ssh/bastion_ssh_key)" \
+       --ssh-public-key "$(ssh-keygen -y -f ~/.ssh/bastion_key/oci_bastion_key)" \
        --display-name "GitHubActionsSession" \
        --query "data.id" --raw-output)
        echo "SESSION_ID=$SESSION_ID"
@@ -84,7 +84,7 @@ jobs:
         fi
 
         # Run the SSH command to check connectivity
-        eval "$SSH_COMMAND -i ~/.ssh/bastion_ssh_key hostname"
+        eval "$SSH_COMMAND -i ~/.ssh/bastion_key/oci_bastion_key hostname"
 
       shell: bash
 
