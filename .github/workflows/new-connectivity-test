@@ -33,6 +33,18 @@ jobs:
       - name: Create OCI Bastion Port Forwarding Session
         id: bastion
         run: |
+
+      SESSION_ID=$(oci bastion session create-managed-ssh \
+       --bastion-id "${{ secrets.BASTION_OCID }}" \
+       --target-private-ip <172.26.10.237> \
+       --ssh-public-key-file ~/.ssh/id_rsa.pub \
+       --region me-jeddah-1 \
+       --query 'data.id' --raw-output) \
+       --session-ttl-in-seconds 900 \
+       --raw-output
+       echo "session_id=$SESSION_ID" >> $GITHUB_OUTPUT
+
+
           SESSION_ID=$(oci bastion session create-port-forwarding \
             --bastion-id "${{ secrets.BASTION_OCID }}" \
             --target-resource-id "${{ secrets.OKE_NODE_OCID }}" \
