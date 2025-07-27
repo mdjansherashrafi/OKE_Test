@@ -1,0 +1,73 @@
+name: Check OKE Connectivity via Bastion
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check-oke:
+    runs-on: ubuntu-latest
+    env:
+      OCI_CLI_AUTH: 'instance_principal' # Use appropriate auth type for your environment
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install OCI CLI
+        run: |
+          curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh | bash -s -- --accept-all-defaults
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+      - name: Setup SSH keys
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.BASTION_SSH_PRIVATE_KEY }}" > ~/.ssh/bastion_key/oci_bastion_key
+          chmod 600 ~/.ssh/bastion_key/oci_bastion_key
+
+      - name: Create OCI Bastion Port Forwarding Session
+        id: bastion
+        run: |
+          SESSION_ID=$(oci bastion session create-port-forwarding \
+            --bastion-id "${{ secrets.BASTION_OCID }}" \
+            --target-resource-id "${{ secrets.OKE_NODE_OCID }}" \
+            --target-port 6443 \
+            --ssh-public-key-file ~/.ssh/bastion_key/oci_bastion_key.pub \
+            --session-ttl-in-seconds 900 \
+            --query 'data.id' --raw-output)
+          echo "session_id=$SESSION_ID" >> $GITHUB_OUTPUT
+
+      - name: Start SSH Tunnel to OKE API
+        run: |
+          # Adjust host, user, and session parameters for your setup
+          ssh -f -N -M -S /tmp/ssh-oke-socket -i ~/.ssh/bastion_key/oci_bastion_key \
+            -L 6443:172.26.10.237:6443 -p 22 \
+            ${BASTION_SSH_USER}@${BASTION_HOST}
+
+      - name: Set up kubeconfig
+        run: |
+          oci ce cluster create-kubeconfig \
+            --cluster-id "${{ secrets.OKE_CLUSTER_OCID }}" \
+            --file ~/.kube/config \
+            --region "${{ secrets.OCI_REGION }}" \
+            --token-version 2.0.0
+
+      - name: K8s connectivity check
+        run: |
+          export KUBECONFIG=~/.kube/config
+          kubectl version
+          kubectl get nodes
+
+      - name: Stop SSH Tunnel
+        run: |
+          ssh -S /tmp/ssh-oke-socket -O exit ${BASTION_SSH_USER}@${BASTION_HOST}
+
+      - name: Delete Bastion session
+        if: always()
+        run: |
+          oci bastion session delete --session-id "${{ steps.bastion.outputs.session_id }}" --force
