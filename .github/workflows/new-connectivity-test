@@ -1,4 +1,4 @@
-name: Check OKE Connectivity via Bastion
+name: Connectivity via Bastion
 
 on:
   workflow_dispatch:
