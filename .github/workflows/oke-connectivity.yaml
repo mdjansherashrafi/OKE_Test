@@ -1,62 +1,72 @@
-name: Connect to OKE via OCI Bastion
+name: Check OKE Connectivity via Bastion
 
 on:
   workflow_dispatch:
 
 jobs:
-  bastion-oke-connect:
+  check-oke-connectivity:
     runs-on: ubuntu-24.04
 
     env:
-      BASTION_OCID: ${{ secrets.BASTION_HOST }}
-      OKE_NODE_OCID: ${{ secrets.OKE_IP_ADDRESS }}
-      BASTION_SSH_PRIVATE_KEY: ${{ secrets.BASTION_SSH_PRIVATE_KEY }}
+      BASTION_OCID: ${{ secrets.BASTION_OCID }}
+      OKE_NODE_OCID: ${{ secrets.OKE_NODE_OCID }}
       OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
       OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Check environment variables
-        run: |
-          echo "BASTION_OCID=$BASTION_OCID"
-          echo "OKE_NODE_OCID=$OKE_NODE_OCID"
-          if [[ -z "$BASTION_OCID" || -z "$OKE_NODE_OCID" ]]; then
-            echo "ERROR: Required environment variables are missing."
-            exit 2
-          fi
+    - name: Setup OCI CLI
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-pip unzip
+        pip3 install oci-cli
 
-      - name: Install OCI CLI
-        run: |
-          curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh | bash -s -- --accept-all-defaults
-          echo "$HOME/bin" >> $GITHUB_PATH
+    - name: Configure OCI CLI
+      run: |
+        mkdir -p ~/.oci
+        echo "$OCI_CONFIG" > ~/.oci/config
+        echo "$OCI_PRIVATE_KEY" > ~/.oci/oci_api_key.pem
+        chmod 600 ~/.oci/oci_api_key.pem
+        sed -i 's|key_file=.*|key_file=~/.oci/oci_api_key.pem|g' ~/.oci/config
 
-      - name: Set up SSH private and public keys
-        run: |
-          mkdir -p ~/.ssh
-          echo "$BASTION_SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub
+    - name: Add Bastion SSH Key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.BASTION_SSH_PRIVATE_KEY }}" > ~/.ssh/bastion_ssh_key
+        chmod 600 ~/.ssh/bastion_ssh_key
 
-      - name: Set up OCI config and API key
-        run: |
-          mkdir -p ~/.oci
-          echo "$OCI_CONFIG" | sed 's|key_file=.*|key_file=~/.oci/oci_api_key.pem|' > ~/.oci/config
-          echo "$OCI_PRIVATE_KEY" > ~/.oci/oci_api_key.pem
-          chmod 600 ~/.oci/config ~/.oci/oci_api_key.pem
+    - name: Start Bastion Session and Connect to OKE Node
+      run: |
+        # Get Bastion session details
+        SESSION_ID=$(oci bastion session create \
+          --bastion-id $BASTION_OCID \
+          --target-resource-type "instance" \
+          --target-resource-id $OKE_NODE_OCID \
+          --session-type "PORT_FORWARDING" \
+          --ssh-public-key "$(ssh-keygen -y -f ~/.ssh/bastion_ssh_key)" \
+          --port 22 \
+          --display-name "GitHubActionsSession" \
+          --query "data.id" --raw-output)
 
-      - name: Debug OCI Config
-        run: |
-          echo "Using Bastion OCID: $BASTION_OCID"
-          echo "Using OKE Node OCID: $OKE_NODE_OCID"
-          echo "Creating Bastion port-forwarding session..."
-          oci bastion session create-port-forwarding \
-            --bastion-id "$BASTION_OCID" \
-            --target-resource-id "$OKE_NODE_OCID" \
-            --target-port 22 \
-            --ssh-public-key-file ~/.ssh/id_rsa.pub \
-            --wait-for-state SUCCEEDED \
-            --query "data.id" \
-            --raw-output \
-            --debug
+        echo "SESSION_ID=$SESSION_ID"
+
+        # Get Bastion session details (SSH command)
+        SESSION_DETAILS=$(oci bastion session get --session-id $SESSION_ID --query "data" --raw-output)
+        SSH_COMMAND=$(echo "$SESSION_DETAILS" | jq -r '.ssh_metadata.ssh_command')
+
+        echo "SSH Command: $SSH_COMMAND"
+
+        # Attempt connectivity check (for example, run 'hostname' on the OKE node)
+        if [[ -z "$SSH_COMMAND" ]]; then
+          echo "ERROR: SSH command not found. Check Bastion session details."
+          exit 2
+        fi
+
+        # Run the SSH command to check connectivity
+        eval "$SSH_COMMAND -i ~/.ssh/bastion_ssh_key hostname"
+
+      shell: bash
+
+    # Optional: Add cleanup steps if needed (delete session, etc.)
