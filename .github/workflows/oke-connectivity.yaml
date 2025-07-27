@@ -61,7 +61,7 @@ jobs:
          echo "ERROR: SSH command not found. Check Bastion session details."
         exit 2
        fi
-        eval "$SSH_COMMAND -i ~/.ssh/bastion_ssh_key hostname"
+        $SSH_COMMAND "hostname"
 
         echo "SESSION_ID=$SESSION_ID"
 
