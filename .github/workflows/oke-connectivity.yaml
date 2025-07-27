@@ -5,10 +5,10 @@ on:
 
 jobs:
   oke-bastion-connectivity:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     env:
-      OCI_BASTION_OCID: ${{ secrets.OCI_BASTION_OCID }}
+      BASTION_OCID: ${{ secrets.BASTION_OCID }}
       OCI_TARGET_RESOURCE_DETAILS: ${{ secrets.OCI_TARGET_RESOURCE_DETAILS }}
       # You can add other secrets as needed
 
@@ -45,7 +45,7 @@ jobs:
       - name: Create Bastion Session
         run: |
           SESSION_DETAILS=$(oci bastion session create \
-            --bastion-id "$OCI_BASTION_OCID" \
+            --bastion-id "$BASTION_OCID" \
             --display-name "GitHubActionsSession" \
             --ssh-public-key-file ~/.ssh/bastion_key/oci_bastion_key.pub \
             --target-resource-details "$OCI_TARGET_RESOURCE_DETAILS" \
