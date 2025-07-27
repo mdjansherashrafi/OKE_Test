@@ -1,4 +1,4 @@
-name: Check OKE Connectivity
+name: latest OKE Connectivity
 
 on:
   workflow_dispatch:
