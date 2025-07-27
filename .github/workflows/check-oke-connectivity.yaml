@@ -1,0 +1,43 @@
+name: Check OKE Connectivity
+
+on:
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  check-oke-connection:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Setup environment
+        run: |
+          mkdir -p ~/.oci ~/.ssh ~/.kube
+          echo "$OCI_CONFIG" > ~/.oci/config
+          echo "$OCI_KEY" > ~/.oci/key
+          echo "$BASTION_KEY" > ~/.ssh/bastion_key
+          echo "$KUBECONFIG_FILE" > ~/.kube/config
+          chmod 400 ~/.oci/key ~/.oci/config ~/.ssh/bastion_key ~/.kube/config
+
+        env:
+          OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+          BASTION_SSH_PRIVATE_KEY: ${{ secrets.BASTION_SSH_PRIVATE_KEY }}
+          KUBECONFIG_FILE: ${{ secrets.KUBECONFIG_FILE }}
+
+      - name: Start Bastion tunnel to OKE API server
+        run: |
+          ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR \
+              -f -N -i ~/.ssh/bastion_key \
+              -L 6443:${{ secrets.OKE_IP_ADDRESS }}:6443 \
+              opc@${{ secrets.BASTION_IP_ADDRESS }}
+          echo "SSH tunnel started via Bastion"
+
+      - name: Check kubectl connectivity
+        run: |
+          export KUBECONFIG=~/.kube/config
+          # Attempt to get cluster nodes
+          if kubectl get nodes; then
+            echo "✅ Connected to OKE cluster"
+          else
+            echo "❌ Failed to connect to OKE cluster"
+            exit 1
+          fi
