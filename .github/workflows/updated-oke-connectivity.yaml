@@ -1,0 +1,65 @@
+name: Check OKE Connectivity
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check-oke-connection:
+    runs-on: ubuntu-24.04
+    env:
+      OCI_CLI_AUTH: instance_principal
+
+    steps:
+      - name: Setup CLI and config
+        run: |
+          mkdir -p ~/.oci ~/.ssh ~/.kube
+
+          echo "$OCI_CONFIG" > ~/.oci/config
+          echo "$OCI_KEY" > ~/.oci/key
+          echo "$BASTION_KEY" > ~/.ssh/bastion_ssh_key
+          echo "$KUBECONFIG_FILE" > ~/.kube/config
+
+          chmod 400 ~/.oci/key ~/.ssh/bastion_ssh_key ~/.kube/config
+        env:
+          OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
+          OCI_KEY: ${{ secrets.OCI_KEY }}
+          BASTION_KEY: ${{ secrets.BASTION_KEY }}
+          KUBECONFIG_FILE: ${{ secrets.KUBECONFIG_FILE }}
+
+      - name: Install OCI CLI
+        run: |
+          curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh | bash -s -- --accept-all-defaults
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Start OCI Bastion session and tunnel
+        run: |
+          SESSION_ID=$(oci bastion session create-port-forwarding \
+            --bastion-id ${{ secrets.BASTION_OCID }} \
+            --target-resource-id ${{ secrets.OKE_NODE_OCID }} \
+            --target-resource-type instance \
+            --session-type PORT_FORWARDING \
+            --ssh-public-key "$(ssh-keygen -y -f ~/.ssh/bastion_ssh_key)" \
+            --display-name github-oke-tunnel \
+            --port 6443 \
+            --query "data.id" --raw-output)
+
+          echo "SESSION_ID=$SESSION_ID"
+
+          SSH_CMD=$(oci bastion session get --session-id $SESSION_ID \
+            --query "data.ssh_metadata.ssh_command" --raw-output)
+
+          echo "SSH command from OCI: $SSH_CMD"
+
+          # Add private key to SSH agent
+          eval "$SSH_CMD -i ~/.ssh/bastion_ssh_key -N -f"
+          echo "✅ Tunnel established"
+
+      - name: Check OKE cluster connectivity
+        run: |
+          export KUBECONFIG=~/.kube/config
+          if kubectl get nodes; then
+            echo "✅ Connected to OKE cluster"
+          else
+            echo "❌ Failed to connect to OKE cluster"
+            exit 1
+          fi
