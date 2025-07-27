@@ -49,9 +49,10 @@ jobs:
             --query "data.ssh_metadata.ssh_command" --raw-output)
 
           echo "SSH command from OCI: $SSH_CMD"
-
+          echo "DEBUG: Full SSH_CMD=$SSH_CMD"
           # Add private key to SSH agent
-          eval "$SSH_CMD -i ~/.ssh/bastion_key -N -f"
+          # eval "$SSH_CMD -i ~/.ssh/bastion_key -N -f"
+          $SSH_CMD -i ~/.ssh/bastion_key -v
           echo "✅ Tunnel established"
 
       - name: Check OKE cluster connectivity
