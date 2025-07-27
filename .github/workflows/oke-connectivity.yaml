@@ -7,55 +7,56 @@ jobs:
   bastion-oke-connect:
     runs-on: ubuntu-24.04
 
+    env:
+      BASTION_OCID: ${{ secrets.BASTION_HOST }}
+      OKE_NODE_OCID: ${{ secrets.OKE_IP_ADDRESS }}
+      BASTION_SSH_PRIVATE_KEY: ${{ secrets.BASTION_SSH_PRIVATE_KEY }}
+      OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
+      OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-    - name: Check environment variables
-      run: |
-         echo "BASTION_OCID=$BASTION_OCID"
-         echo "OKE_NODE_OCID=$OKE_NODE_OCID"
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Check environment variables
+        run: |
+          echo "BASTION_OCID=$BASTION_OCID"
+          echo "OKE_NODE_OCID=$OKE_NODE_OCID"
           if [[ -z "$BASTION_OCID" || -z "$OKE_NODE_OCID" ]]; then
             echo "ERROR: Required environment variables are missing."
             exit 2
           fi
-    - name: Install OCI CLI
-      run: |
-        curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh | bash -s -- --accept-all-defaults
-        echo "$HOME/bin" >> $GITHUB_PATH
-    - name: Set up SSH private and public keys
-      run: |
-        mkdir -p ~/.ssh
-        echo "$BASTION_SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
-        ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub
-      env:
-        BASTION_SSH_PRIVATE_KEY: ${{ secrets.BASTION_SSH_PRIVATE_KEY }}
 
-    - name: Set up OCI config and key
-      run: |
-        mkdir -p ~/.oci
-        # Patch the config to use the correct key path in the runner environment
-        echo "$OCI_CONFIG" | sed 's|key_file=.*|key_file=~/.oci/oci_api_key.pem|' > ~/.oci/config
-        echo "$OCI_PRIVATE_KEY" > ~/.oci/oci_api_key.pem
-        chmod 600 ~/.oci/config ~/.oci/oci_api_key.pem
-      env:
-        OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
-        OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
-    - name: Debug OCI Config
-      run: |
-       cat ~/.oci/config
-       
-       echo "Creating Bastion port-forwarding session..."
-        oci bastion session create-port-forwarding \
-        --bastion-id "$BASTION_OCID" \
-        --target-resource-id "$OKE_NODE_OCID" \
-        --target-port 22 \
-        --ssh-public-key-file ~/.ssh/id_rsa.pub \
-        --wait-for-state SUCCEEDED \
-        --query "data.id" \
-        --raw-output \
-        --debug
- 
-    env:
-     BASTION_OCID: ${{ secrets.BASTION_HOST }}
-     OKE_NODE_OCID: ${{ secrets.OKE_IP_ADDRESS }}
+      - name: Install OCI CLI
+        run: |
+          curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh | bash -s -- --accept-all-defaults
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Set up SSH private and public keys
+        run: |
+          mkdir -p ~/.ssh
+          echo "$BASTION_SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub
+
+      - name: Set up OCI config and API key
+        run: |
+          mkdir -p ~/.oci
+          echo "$OCI_CONFIG" | sed 's|key_file=.*|key_file=~/.oci/oci_api_key.pem|' > ~/.oci/config
+          echo "$OCI_PRIVATE_KEY" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/config ~/.oci/oci_api_key.pem
+
+      - name: Debug OCI Config
+        run: |
+          echo "Using Bastion OCID: $BASTION_OCID"
+          echo "Using OKE Node OCID: $OKE_NODE_OCID"
+          echo "Creating Bastion port-forwarding session..."
+          oci bastion session create-port-forwarding \
+            --bastion-id "$BASTION_OCID" \
+            --target-resource-id "$OKE_NODE_OCID" \
+            --target-port 22 \
+            --ssh-public-key-file ~/.ssh/id_rsa.pub \
+            --wait-for-state SUCCEEDED \
+            --query "data.id" \
+            --raw-output \
+            --debug
