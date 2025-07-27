@@ -14,10 +14,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up OCI CLI
-        uses: oracle-actions/setup-oci-cli@v1
+      - name: Setup OCI CLI
+        run: |
+           sudo apt-get update
+           sudo apt-get install -y python3-pip unzip
+           pip3 install oci-cli
 
       - name: Set up SSH key
         # Copy your SSH key and public key from repository or secrets
