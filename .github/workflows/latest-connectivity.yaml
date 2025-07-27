@@ -18,7 +18,12 @@ jobs:
           echo "$OCI_KEY" > ~/.oci/key
           echo "$BASTION_KEY" | base64 --decode > ~/.ssh/bastion_key
           echo "$KUBECONFIG_FILE" > ~/.kube/config
-
+          echo "$BASTION_KEY" | base64 --decode > ~/.ssh/bastion_key
+          chmod 400 ~/.ssh/bastion_key
+          echo "Private key file:"
+          cat ~/.ssh/bastion_key
+          ssh-keygen -y -f ~/.ssh/bastion_key
+          echo "SSH command: $SSH_CMD -i ~/.ssh/bastion_key -vvv"
           chmod 400 ~/.oci/key ~/.ssh/bastion_key ~/.kube/config
         env:
           OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
