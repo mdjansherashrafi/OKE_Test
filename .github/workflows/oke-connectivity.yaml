@@ -4,88 +4,69 @@ on:
   workflow_dispatch:
 
 jobs:
-  check-oke-connectivity:
-    runs-on: ubuntu-24.04
+  oke-bastion-connectivity:
+    runs-on: ubuntu-latest
 
     env:
-      BASTION_OCID: ${{ secrets.BASTION_OCID }}
-      OKE_NODE_OCID: ${{ secrets.OKE_NODE_OCID }}
-      OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
-      OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+      OCI_BASTION_OCID: ${{ secrets.OCI_BASTION_OCID }}
+      OCI_TARGET_RESOURCE_DETAILS: ${{ secrets.OCI_TARGET_RESOURCE_DETAILS }}
+      # You can add other secrets as needed
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Setup OCI CLI
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y python3-pip unzip
-        pip3 install oci-cli
+      - name: Set up OCI CLI
+        uses: oracle-actions/setup-oci-cli@v1
 
-    - name: Configure OCI CLI
-      run: |
-        mkdir -p ~/.oci
-        echo "$OCI_CONFIG" > ~/.oci/config
-        echo "$OCI_PRIVATE_KEY" > ~/.oci/oci_api_key.pem
-        chmod 600 ~/.oci/oci_api_key.pem
-        sed -i 's|key_file=.*|key_file=~/.oci/oci_api_key.pem|g' ~/.oci/config
+      - name: Set up SSH key
+        # Copy your SSH key and public key from repository or secrets
+        run: |
+          mkdir -p ~/.ssh/bastion_key
+          echo "${{ secrets.OCI_BASTION_KEY }}" > ~/.ssh/bastion_key/oci_bastion_key
+          echo "${{ secrets.OCI_BASTION_KEY_PUB }}" > ~/.ssh/bastion_key/oci_bastion_key.pub
+          chmod 600 ~/.ssh/bastion_key/oci_bastion_key
+          chmod 644 ~/.ssh/bastion_key/oci_bastion_key.pub
 
-    - name: Add Bastion SSH Key
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.BASTION_SSH_PRIVATE_KEY }}" > ~/.ssh/bastion_key/oci_bastion_key
-        chmod 600 ~/.ssh/bastion_key/oci_bastion_key
+      - name: Install jq
+        run: sudo apt-get install -y jq
 
-    - name: Start Bastion Session and Connect to OKE Node
-      run: |
-       sudo apt-get install -y jq
-       # Validate SSH private key and extract public key
-        SSH_PUBLIC_KEY=$(ssh-keygen -y -f ~/.ssh/bastion_key/oci_bastion_key 2>/dev/null)
-        if [[ -z "$SSH_PUBLIC_KEY" ]]; then
-         echo "ERROR: Invalid Bastion SSH private key."
-         exit 2
-        fi
-       SESSION_ID=$(oci bastion session create \
-       --bastion-id $BASTION_OCID \
-       --target-resource-type "instance" \
-       --target-resource-id $OKE_NODE_OCID \
-       --session-type "SSH" \
-       --ssh-public-key "$(ssh-keygen -y -f ~/.ssh/bastion_key/oci_bastion_key)" \
-       --display-name "GitHubActionsSession" \
-       --query "data.id" --raw-output)
-       echo "SESSION_ID=$SESSION_ID"
-       if [[ -z "$SESSION_ID" ]]; then
-        echo "ERROR: Could not create Bastion session. Check Bastion OCID and SSH key."
-        exit 2
-       fi
-       SESSION_DETAILS=$(oci bastion session get --session-id $SESSION_ID --query "data" --raw-output)
-       echo "$SESSION_DETAILS"
-       SSH_COMMAND=$(echo "$SESSION_DETAILS" | jq -r '.ssh_metadata.ssh_command')
-       echo "SSH Command: $SSH_COMMAND"
-       if [[ -z "$SSH_COMMAND" ]]; then
-         echo "ERROR: SSH command not found. Check Bastion session details."
-        exit 2
-       fi
-        $SSH_COMMAND "hostname"
+      - name: Validate SSH private key and extract public key
+        run: |
+          SSH_PUBLIC_KEY=$(ssh-keygen -y -f ~/.ssh/bastion_key/oci_bastion_key 2>/dev/null)
+          if [[ -z "$SSH_PUBLIC_KEY" ]]; then
+            echo "ERROR: Invalid Bastion SSH private key."
+            exit 2
+          fi
 
-        echo "SESSION_ID=$SESSION_ID"
+      - name: Create Bastion Session
+        run: |
+          SESSION_DETAILS=$(oci bastion session create \
+            --bastion-id "$OCI_BASTION_OCID" \
+            --display-name "GitHubActionsSession" \
+            --ssh-public-key-file ~/.ssh/bastion_key/oci_bastion_key.pub \
+            --target-resource-details "$OCI_TARGET_RESOURCE_DETAILS" \
+            --wait-for-state ACTIVE \
+            --query "data" \
+            --raw-output)
+          SESSION_ID=$(echo "$SESSION_DETAILS" | jq -r '.id')
+          echo "SESSION_ID=$SESSION_ID"
+          if [[ -z "$SESSION_ID" ]]; then
+            echo "ERROR: Could not create Bastion session. Check Bastion OCID and SSH key."
+            exit 2
+          fi
 
-        # Get Bastion session details (SSH command)
-        SESSION_DETAILS=$(oci bastion session get --session-id $SESSION_ID --query "data" --raw-output)
-        SSH_COMMAND=$(echo "$SESSION_DETAILS" | jq -r '.ssh_metadata.ssh_command')
+      - name: Get SSH Command from Bastion Session
+        run: |
+          SESSION_INFO=$(oci bastion session get --session-id "$SESSION_ID" --query "data" --raw-output)
+          SSH_COMMAND=$(echo "$SESSION_INFO" | jq -r '.ssh_metadata.ssh_command')
+          echo "SSH Command: $SSH_COMMAND"
+          if [[ -z "$SSH_COMMAND" ]]; then
+            echo "ERROR: SSH command not found. Check Bastion session details."
+            exit 2
+          fi
 
-        echo "SSH Command: $SSH_COMMAND"
-
-        # Attempt connectivity check (for example, run 'hostname' on the OKE node)
-        if [[ -z "$SSH_COMMAND" ]]; then
-          echo "ERROR: SSH command not found. Check Bastion session details."
-          exit 2
-        fi
-
-        # Run the SSH command to check connectivity
-        eval "$SSH_COMMAND -i ~/.ssh/bastion_key/oci_bastion_key hostname"
-
-      shell: bash
-
-    # Optional: Add cleanup steps if needed (delete session, etc.)
+      - name: Connectivity Check to OKE node
+        run: |
+          echo "Testing connectivity..."
+          $SSH_COMMAND hostname
