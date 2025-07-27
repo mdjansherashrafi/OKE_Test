@@ -16,10 +16,10 @@ jobs:
 
           echo "$OCI_CONFIG" > ~/.oci/config
           echo "$OCI_KEY" > ~/.oci/key
-          echo "$BASTION_KEY" > ~/.ssh/bastion_ssh_key
+          echo "$BASTION_KEY" > ~/.ssh/bastion_key
           echo "$KUBECONFIG_FILE" > ~/.kube/config
 
-          chmod 400 ~/.oci/key ~/.ssh/bastion_ssh_key ~/.kube/config
+          chmod 400 ~/.oci/key ~/.ssh/bastion_key ~/.kube/config
         env:
           OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
           OCI_KEY: ${{ secrets.OCI_KEY }}
@@ -38,7 +38,7 @@ jobs:
             --target-resource-id ${{ secrets.OKE_NODE_OCID }} \
             --target-resource-type instance \
             --session-type PORT_FORWARDING \
-            --ssh-public-key "$(ssh-keygen -y -f ~/.ssh/bastion_ssh_key)" \
+            --ssh-public-key "$(ssh-keygen -y -f ~/.ssh/bastion_key)" \
             --display-name github-oke-tunnel \
             --port 6443 \
             --query "data.id" --raw-output)
@@ -51,7 +51,7 @@ jobs:
           echo "SSH command from OCI: $SSH_CMD"
 
           # Add private key to SSH agent
-          eval "$SSH_CMD -i ~/.ssh/bastion_ssh_key -N -f"
+          eval "$SSH_CMD -i ~/.ssh/bastion_key -N -f"
           echo "✅ Tunnel established"
 
       - name: Check OKE cluster connectivity
