@@ -26,8 +26,8 @@ jobs:
         # Copy your SSH key and public key from repository or secrets
         run: |
           mkdir -p ~/.ssh/bastion_key
-          echo "${{ secrets.OCI_BASTION_KEY }}" > ~/.ssh/bastion_key/oci_bastion_key
-          echo "${{ secrets.OCI_BASTION_KEY_PUB }}" > ~/.ssh/bastion_key/oci_bastion_key.pub
+          echo "${{ secrets.BASTION_SSH_PRIVATE_KEY }}" > ~/.ssh/bastion_key/oci_bastion_key
+          echo "${{ secrets.BASTION_SSH_PRIVATE_KEY_PUB }}" > ~/.ssh/bastion_key/oci_bastion_key.pub
           chmod 600 ~/.ssh/bastion_key/oci_bastion_key
           chmod 644 ~/.ssh/bastion_key/oci_bastion_key.pub
 
