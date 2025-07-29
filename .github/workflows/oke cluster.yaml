@@ -5,29 +5,24 @@ on:
 
 jobs:
   check-oke-connection:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Set up directories and config
         run: |
-          mkdir -p ~/.oci ~/.kube
-          mkdir -p ~/.ssh
-          
+          mkdir -p ~/.oci ~/.ssh/bastion_key ~/.kube
 
+          
           # Restore OCI CLI config & key
           echo "${OCI_CONFIG}" > ~/.oci/config
           echo "${OCI_KEY}" > ~/.oci/oci_api_key.pem
           chmod 600 ~/.oci/oci_api_key.pem
 
+          
           # Restore SSH PRIVATE key in the matching subdir
-          # Remove the folder if it exists with the same name
-           [ -d ~/.ssh/bastion_key ] && rm -rf ~/.ssh/bastion_key
-
-          # Now write the actual private key as a file
-          # echo "$BASTION_KEY" | base64 --decode > ~/.ssh/bastion_key
-          # chmod 400 ~/.ssh/bastion_key
-            echo "${{ secrets.BASTION_KEY }}" > ~/.ssh/bastion_key
-            chmod 600 ~/.ssh/bastion_key
+          echo "${BASTION_KEY}" | base64 --decode > ~/.ssh/bastion_key/oci_bastion_key
+          chmod 600 ~/.ssh/bastion_key/oci_bastion_key
+          
 
           # Generate public key (used by OCI CLI) if not already present
           ssh-keygen -y -f ~/.ssh/bastion_key/oci_bastion_key > ~/.ssh/bastion_key/oci_bastion_key.pub
