@@ -43,64 +43,51 @@ jobs:
           BASTION_OCID: ${{ secrets.BASTION_OCID }}
           OKE_NODE_OCID: ${{ secrets.OKE_NODE_OCID }}
         run: |
-          export PATH=$HOME/bin:$PATH
+         export PATH=$HOME/bin:$PATH
+         SESSION_ID=$(oci bastion session create-port-forwarding \
+         --bastion-id "$BASTION_OCID" \
+         --target-resource-id "$OKE_NODE_OCID" \
+         --target-resource-type instance \
+         --ssh-public-key-file ~/.ssh/bastion_key/oci_bastion_key.pub \
+         --display-name github-oke-tunnel \
+         --port 6443 \
+         --query "data.id" --raw-output)
 
-          # Create port forwarding session on port 6443 (K8s API port)
-          SESSION_ID=$(oci bastion session create-port-forwarding \
-            --bastion-id "$BASTION_OCID" \
-            --target-resource-id "$OKE_NODE_OCID" \
-            --target-resource-type instance \
-            --ssh-public-key-file ~/.ssh/bastion_key/oci_bastion_key.pub \
-            --display-name github-oke-tunnel \
-            --port 6443 \
-            --query "data.id" --raw-output)
-
-          if [[ -z "$SESSION_ID" ]]; then
-            echo "❌ Failed to create Bastion session."
-            exit 2
-          fi
+         if [[ -z "$SESSION_ID" ]]; then
+         echo "❌ Failed to create Bastion session."
+          exit 2
+         fi
 
           echo "SESSION_ID=$SESSION_ID"
 
-          # Get SSH command for the bastion session
-          SSH_CMD=$(oci bastion session get --session-id "$SESSION_ID" \
-            --query "data.ssh_metadata.ssh_command" --raw-output)
+         # Check session state
+         SESSION_STATE=$(oci bastion session get --session-id "$SESSION_ID" --query "data.lifecycle-state" --raw-output)
+         echo "Bastion session state: $SESSION_STATE"
+         if [[ "$SESSION_STATE" != "ACTIVE" ]]; then
+           echo "❌ Bastion session is not active yet."
+           exit 2
+         fi
 
-          if [[ -z "$SSH_CMD" ]]; then
-            echo "❌ Failed to get SSH command from Bastion session."
-            exit 2
-          fi
+         SSH_CMD=$(oci bastion session get --session-id "$SESSION_ID" --query "data.ssh_metadata.ssh_command" --raw-output)
+         if [[ -z "$SSH_CMD" ]]; then
+          echo "❌ Failed to get SSH command from Bastion session."
+          exit 2
+         fi
 
-          echo "Starting SSH tunnel..."
+          echo "Starting SSH tunnel with verbose logging..."
 
-          # Start SSH tunnel in background
-          eval "$SSH_CMD -i ~/.ssh/bastion_key/oci_bastion_key -N -f"
+         # Remove -f to keep SSH in foreground, add verbose for logs
+          $SSH_CMD -i ~/.ssh/bastion_key/oci_bastion_key -N -v &
+          SSH_PID=$!
 
-          # Wait for tunnel to establish
-          sleep 10
+         # Wait for tunnel to establish
+          sleep 15
 
-          # Check if local port 6443 is open
-          if ! nc -z localhost 6443; then
-            echo "❌ Tunnel not established (port 6443 not open)"
-            exit 2
-          fi
+          if ! nc -zv localhost 6443; then
+          echo "❌ Tunnel not established (port 6443 not open)"
+         # Optionally kill SSH process if still running
+          kill $SSH_PID 2>/dev/null || true
+          exit 2
+         fi
 
-          echo "✅ Tunnel established."
-
-      - name: Test connectivity with kubectl
-        run: |
-          export KUBECONFIG=~/.kube/config
-          kubectl version --short
-          if kubectl get nodes; then
-            echo "✅ Successfully connected to OKE cluster"
-          else
-            echo "❌ Failed to connect to OKE cluster"
-            exit 1
-          fi
-
-      - name: Clean up Bastion session
-        env:
-          SESSION_ID: ${{ steps.create_session.outputs.SESSION_ID }}
-        run: |
-          # Terminate bastion session to close the tunnel
-          oci bastion session delete --session-id "$SESSION_ID" --wait-for-state TERMINATED --force || true
+echo "✅ Tunnel established to OKE API endpoint."
