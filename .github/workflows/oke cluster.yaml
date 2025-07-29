@@ -34,6 +34,7 @@ jobs:
           OCI_KEY: ${{ secrets.OCI_KEY }}
           BASTION_KEY: ${{ secrets.BASTION_KEY }}
           KUBECONFIG_FILE: ${{ secrets.KUBECONFIG_FILE }}
+           export SUPPRESS_LABEL_WARNING=True
 
       - name: Install OCI CLI and dependencies
         run: |
@@ -45,8 +46,8 @@ jobs:
       - name: Start Bastion session and port-forward tunnel
         run: |
           export PATH=$HOME/bin:$PATH
-
-          SESSION_ID=$(oci bastion session create-port-forwarding \
+           \
+          SESSION_ID=$(oci --debug bastion session create-port-forwarding \
             --bastion-id "${{ secrets.BASTION_OCID }}" \
             --target-resource-id "${{ secrets.OKE_NODE_OCID }}" \
             --target-resource-type instance \
