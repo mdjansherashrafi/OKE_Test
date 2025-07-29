@@ -1,0 +1,92 @@
+name: OKE via Bastion
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check-oke-connection:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up directories and config
+        run: |
+          mkdir -p ~/.oci ~/.ssh/bastion_key ~/.kube
+
+          # Restore OCI CLI config & key
+          echo "${OCI_CONFIG}" > ~/.oci/config
+          echo "${OCI_KEY}" > ~/.oci/key
+          chmod 600 ~/.oci/config ~/.oci/key
+
+          # Restore SSH PRIVATE key in the matching subdir
+          echo "${BASTION_KEY_B64}" | base64 --decode > ~/.ssh/bastion_key/oci_bastion_key
+          chmod 600 ~/.ssh/bastion_key/oci_bastion_key
+
+          # Generate public key (used by OCI CLI) if not already present
+          ssh-keygen -y -f ~/.ssh/bastion_key/oci_bastion_key > ~/.ssh/bastion_key/oci_bastion_key.pub
+          chmod 644 ~/.ssh/bastion_key/oci_bastion_key.pub
+
+          # Restore your kubeconfig
+          echo "${KUBECONFIG_FILE}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+        env:
+          OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
+          OCI_KEY: ${{ secrets.OCI_KEY }}
+          BASTION_KEY_B64: ${{ secrets.BASTION_KEY_B64 }}
+          KUBECONFIG_FILE: ${{ secrets.KUBECONFIG_FILE }}
+
+      - name: Install OCI CLI and dependencies
+        run: |
+          curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh | bash -s -- --accept-all-defaults
+
+          # Add OCI CLI to path
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Start Bastion session and port-forward tunnel
+        run: |
+          export PATH=$HOME/bin:$PATH
+
+          SESSION_ID=$(oci bastion session create-port-forwarding \
+            --bastion-id "${{ secrets.BASTION_OCID }}" \
+            --target-resource-id "${{ secrets.OKE_NODE_OCID }}" \
+            --target-resource-type instance \
+            --ssh-public-key-file ~/.ssh/bastion_key/oci_bastion_key.pub \
+            --display-name github-oke-tunnel \
+            --port 6443 \
+            --query "data.id" --raw-output)
+
+          if [[ -z "$SESSION_ID" ]]; then
+            echo "❌ Failed to create Bastion session."
+            exit 2
+          fi
+
+          echo "SESSION_ID=$SESSION_ID"
+
+          SSH_CMD=$(oci bastion session get --session-id $SESSION_ID \
+            --query "data.ssh_metadata.ssh_command" --raw-output)
+
+          if [[ -z "$SSH_CMD" ]]; then
+            echo "❌ Failed to get SSH command from Bastion session."
+            exit 2
+          fi
+
+          # Start SSH tunnel in background
+          eval "$SSH_CMD -i ~/.ssh/bastion_key/oci_bastion_key -N -f"
+          sleep 10
+
+          # Optionally, check if port is listening
+          if ! nc -z localhost 6443; then
+            echo "❌ Tunnel not established (port not open on 6443)"
+            exit 2
+          fi
+
+          echo "✅ Tunnel established to OKE API endpoint."
+
+      - name: Verify OKE cluster connectivity
+        run: |
+          export KUBECONFIG=~/.kube/config
+          kubectl version
+          kubectl get nodes
+
+    env:
+      OCI_CLI_AUTH: api_key   # api_key needed unless this runs on an OCI Compute instance
