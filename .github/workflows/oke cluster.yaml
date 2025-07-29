@@ -34,7 +34,7 @@ jobs:
           OCI_KEY: ${{ secrets.OCI_KEY }}
           BASTION_KEY: ${{ secrets.BASTION_KEY }}
           KUBECONFIG_FILE: ${{ secrets.KUBECONFIG_FILE }}
-           export SUPPRESS_LABEL_WARNING=True
+           
 
       - name: Install OCI CLI and dependencies
         run: |
@@ -86,6 +86,7 @@ jobs:
       - name: Verify OKE cluster connectivity
         run: |
           export KUBECONFIG=~/.kube/config
+          export SUPPRESS_LABEL_WARNING=True
           kubectl version
           kubectl get nodes
 
