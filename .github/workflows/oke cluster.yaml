@@ -18,7 +18,7 @@ jobs:
           chmod 600 ~/.oci/config ~/.oci/key
 
           # Restore SSH PRIVATE key in the matching subdir
-          echo "${BASTION_KEY_B64}" | base64 --decode > ~/.ssh/bastion_key/oci_bastion_key
+          echo "${BASTION_KEY}" | base64 --decode > ~/.ssh/bastion_key/oci_bastion_key
           chmod 600 ~/.ssh/bastion_key/oci_bastion_key
 
           # Generate public key (used by OCI CLI) if not already present
@@ -32,7 +32,7 @@ jobs:
         env:
           OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
           OCI_KEY: ${{ secrets.OCI_KEY }}
-          BASTION_KEY_B64: ${{ secrets.BASTION_KEY_B64 }}
+          BASTION_KEY: ${{ secrets.BASTION_KEY }}
           KUBECONFIG_FILE: ${{ secrets.KUBECONFIG_FILE }}
 
       - name: Install OCI CLI and dependencies
