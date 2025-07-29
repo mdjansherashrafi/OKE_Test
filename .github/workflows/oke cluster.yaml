@@ -14,8 +14,8 @@ jobs:
 
           # Restore OCI CLI config & key
           echo "${OCI_CONFIG}" > ~/.oci/config
-          echo "${OCI_KEY}" > ~/.oci/key
-          chmod 600 ~/.oci/config ~/.oci/key
+          echo "${OCI_KEY}" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
 
           # Restore SSH PRIVATE key in the matching subdir
           echo "${BASTION_KEY}" | base64 --decode > ~/.ssh/bastion_key/oci_bastion_key
