@@ -14,8 +14,15 @@ jobs:
 
           
           # Restore OCI CLI config & key
-          echo "${OCI_CONFIG}" > ~/.oci/config
-          echo "${OCI_KEY}" > ~/.oci/oci_api_key.pem
+          # echo "${OCI_CONFIG}" > ~/.oci/config
+          # echo "${OCI_KEY}" > ~/.oci/oci_api_key.pem
+          # chmod 600 ~/.oci/oci_api_key.pem
+
+          - name: Set up OCI CLI Config
+          run: |
+          mkdir -p ~/.oci
+          echo "${{ secrets.OCI_CONFIG }}" > ~/.oci/config
+          echo "${{ secrets.OCI_KEY }}" > ~/.oci/oci_api_key.pem
           chmod 600 ~/.oci/oci_api_key.pem
 
           
