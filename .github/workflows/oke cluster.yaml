@@ -41,6 +41,21 @@ jobs:
           echo "BASTION_IP_ADDRESS (base64) = $(echo ${BASTION_IP_ADDRESS})"   
         
           chmod 400 ~/.oci/key ~/.oci/config ~/.ssh/bastion
+          - name: Write OCI private key
+  
+          echo "${{ secrets.OCI_PRIVATE_KEY }}" | base64 -d > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
+
+          - name: Set up OCI config
+          run: |
+          cat > ~/.oci/config <<EOF
+          [DEFAULT]
+           user = ocid1.user.oc1..aaaaaaaautyyphhslyuli4ilzsos4chfnyg6te4pi57cf6gnigw2oegd632a
+           fingerprint = 13:92:96:ce:41:2e:0f:e3:3f:e1:90:fe:db:72:05:d0
+           tenancy = ocid1.tenancy.oc1..aaaaaaaavk3oksie5xq62bscvuip2s6dg3mekwx4tfoylmen2gnyuohv6c7q
+           region = me-jeddah-1
+           key_file = /Users/jansher/.ssh/apigw_nonprod/id_rsa
+           EOF
       - name: Debug SSH Connectivity
         run:
           echo "Testing SSH connectivity..."
