@@ -14,8 +14,6 @@ jobs:
       - name: set path
         run: |
           echo "/home/runner/bin" >> $GITHUB_PATH
-
-      - name: connect
         env:
          OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
          OCI_KEY: ${{ secrets.OCI_KEY }}
