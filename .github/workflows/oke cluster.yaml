@@ -1,4 +1,4 @@
-name: OKE via Bastion
+name: OKE
 
 on:
   workflow_dispatch:
