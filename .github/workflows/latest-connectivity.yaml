@@ -6,8 +6,9 @@ on:
 jobs:
   check-oke-connection:
     runs-on: ubuntu-24.04
-    env:
-      OCI_CLI_AUTH: instance_principal
+  env:
+  BASTION_OCID: ${{ secrets.BASTION_OCID }}
+  OCI_TARGET_RESOURCE_ID: ${{ secrets.OCI_TARGET_RESOURCE_ID }}
 
     steps:
       - name: Setup CLI and config
