@@ -23,6 +23,28 @@ jobs:
           BASTION_SSH_PRIVATE_KEY: ${{ secrets.BASTION_SSH_PRIVATE_KEY }}
           KUBECONFIG_FILE: ${{ secrets.KUBECONFIG_FILE }}
 
+
+      - name: Setup SSH tunnel to OKE
+        run: |
+           echo "${{ secrets.BASTION_SSH_KEY }}" > ~/.ssh/bastion_key
+           chmod 600 ~/.ssh/bastion_key
+           ssh -o ConnectTimeout=30 \
+           -o StrictHostKeyChecking=no \
+           -o LogLevel=ERROR \
+           -f -N -i ~/.ssh/bastion_key \
+           -L 6443:${{ secrets.OKE_API_SERVER_IP }}:6443 \
+           opc@${{ secrets.BASTION_PUBLIC_IP }}
+              sleep 5
+            curl -k https://localhost:6443/version || echo "Tunnel verification failed"
+
+      - name: Configure kubectl
+        run: |
+         # Use localhost:6443 as API server
+         kubectl config set-cluster oke-cluster --server=https://localhost:6443
+         kubectl config set-credentials oke-user --token="${{ secrets.OKE_TOKEN }}"
+         kubectl config set-context oke-context --cluster=oke-cluster --user=oke-user
+         kubectl config use-context oke-context
+
       - name: Start Bastion tunnel to OKE API server
         run: |
           ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR \
