@@ -1,4 +1,4 @@
-name: Check OKE Connectivity
+name: Check OKE Connectivity_1
 
 on:
   workflow_dispatch:
@@ -12,12 +12,13 @@ jobs:
     steps:
       - name: Setup CLI and config
         run: |
-          mkdir -p ~/.oci ~/.ssh ~/.kube
-
-          echo "$OCI_CONFIG" > ~/.oci/config
-          echo "$OCI_KEY" > ~/.oci/key
-          echo "$BASTION_KEY" > ~/.ssh/bastion_ssh_key
-          echo "$KUBECONFIG_FILE" > ~/.kube/config
+         set -x
+         mkdir -p ~/.oci ~/.ssh ~/.kube
+         echo "$OCI_CONFIG" > ~/.oci/config || exit 1
+         echo "$OCI_KEY" > ~/.oci/key || exit 1
+         echo "$BASTION_KEY" > ~/.ssh/bastion_ssh_key || exit 1
+         echo "$KUBECONFIG_FILE" > ~/.kube/config || exit 1
+         chmod 400 ~/.oci/key ~/.ssh/bastion_ssh_key ~/.kube/config || exit 1
 
           chmod 400 ~/.oci/key ~/.ssh/bastion_ssh_key ~/.kube/config
         env:
