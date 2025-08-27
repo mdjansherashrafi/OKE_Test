@@ -32,6 +32,16 @@ jobs:
           curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh | bash -s -- --accept-all-defaults
           echo "$HOME/bin" >> $GITHUB_PATH
 
+          - name: Check secret environment variables
+            run: |
+            echo "BASTION_OCID: ${{ secrets.BASTION_OCID }}"
+            echo "OKE_NODE_OCID: ${{ secrets.OKE_NODE_OCID }}"
+            if [ -z "${{ secrets.BASTION_OCID }}" ] || [ -z "${{ secrets.OKE_NODE_OCID }}" ] || [ -z "${{ secrets.BASTION_KEY }}" ]; then
+            echo "❌ One or more secrets are missing!"
+            exit 1
+            fi
+            echo "✅ All required secrets are set."
+
       - name: Start OCI Bastion session and tunnel
         run: |
           SESSION_ID=$(oci bastion session create-port-forwarding \
