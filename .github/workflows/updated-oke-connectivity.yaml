@@ -34,13 +34,16 @@ jobs:
       - name: Start OCI Bastion session and tunnel
         run: |
           SESSION_ID=$(oci bastion session create-port-forwarding \
-            --bastion-id ${{ secrets.BASTION_OCID }} \
-            --target-resource-id ${{ secrets.OKE_NODE_OCID }} \
-            --target-resource-type instance \
-            --session-type PORT_FORWARDING \
-            --ssh-public-key "$(ssh-keygen -y -f ~/.ssh/bastion_ssh_key)" \
-            --display-name github-oke-tunnel \
+             --bastion-id *** \
+             --target-resource-id *** \
+             --target-resource-type instance \
+             --session-type PORT_FORWARDING \
+             --ssh-public-key "$(ssh-keygen -y -f ~/.ssh/bastion_ssh_key)" \
+             --display-name github-oke-tunnel \
             --port 6443 \
+             --query "data.id" --raw-output)
+
+            echo "SESSION_ID=$SESSION_ID"
             --query "data.id" --raw-output)
 
           echo "SESSION_ID=$SESSION_ID"
