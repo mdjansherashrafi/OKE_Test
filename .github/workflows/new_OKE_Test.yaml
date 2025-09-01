@@ -29,22 +29,7 @@ jobs:
          echo "$BASTION_KEY" > ~/.ssh/bastion_ssh_key || exit 1
          echo "$KUBECONFIG_FILE" > ~/.kube/config || exit 1
          chmod 400 ~/.oci/key ~/.ssh/bastion_ssh_key ~/.kube/config || exit 1
-    
-      - name: Configure OCI CLI
-        run: |
-         mkdir -p ~/.oci
-         oci setup config \
-         --user $OCI_USER_OCID \
-         --fingerprint $OCI_FINGERPRINT \
-         --tenancy $OCI_TENANCY_OCID \
-         --region $OCI_REGION \
-         --key-file <(echo "$OCI_PRIVATE_KEY")
-        env:
-         OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
-         OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
-         OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
-         OCI_REGION: ${{ secrets.OCI_REGION }}
-         OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+
 
       - name: Generate SSH Key for Bastion
         run: |
