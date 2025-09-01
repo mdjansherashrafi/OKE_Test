@@ -20,6 +20,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3-pip
           pip3 install oci-cli
+      - run: oci --version
 
       - name: Generate SSH Key for Bastion
         run: |
