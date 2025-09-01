@@ -15,10 +15,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
     
-      - name: Setup OCI CLI
-        uses: oracle-oss/actions-setup-oci@v1
-        with:
-          oci-version: 'latest'
+      - name: Setup CLI and config
+        run: |
+         set -x
+         mkdir -p ~/.oci ~/.ssh ~/.kube
+         echo "$OCI_CONFIG" > ~/.oci/config || exit 1
+         echo "$OCI_KEY" > ~/.oci/key || exit 1
+         echo "$BASTION_KEY" > ~/.ssh/bastion_ssh_key || exit 1
+         echo "$KUBECONFIG_FILE" > ~/.kube/config || exit 1
+         chmod 400 ~/.oci/key ~/.ssh/bastion_ssh_key ~/.kube/config || exit 1
     
       - name: Configure OCI CLI
         run: |
