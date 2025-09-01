@@ -1,0 +1,290 @@
+name: Test OKE_2 Connectivity
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+jobs:
+  test-oke-connection:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install utilities & OCI CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip jq net-tools iproute2 openssh-client curl
+          pip3 install --upgrade oci-cli
+          echo "OCI CLI version:"
+          oci --version
+
+      - name: Prepare / optionally generate SSH key for Bastion
+        id: prepare_ssh
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          # If the repo/secret supplies a public key, prefer it (secret name: BASTION_PUBLIC_KEY).
+          if [ -n "${{ secrets.BASTION_PUBLIC_KEY }}" ]; then
+            echo "Using BASTION_PUBLIC_KEY secret to create ~/.ssh/bastion_key.pub"
+            printf '%s' "${{ secrets.BASTION_PUBLIC_KEY }}" > ~/.ssh/bastion_key.pub
+            chmod 644 ~/.ssh/bastion_key.pub
+          else
+            echo "No BASTION_PUBLIC_KEY secret provided — generating an ephemeral keypair at ~/.ssh/bastion_key"
+            if [ ! -f ~/.ssh/bastion_key ]; then
+              ssh-keygen -t rsa -b 2048 -f ~/.ssh/bastion_key -N "" -q
+            else
+              echo "~/.ssh/bastion_key already exists — keeping it"
+            fi
+            chmod 600 ~/.ssh/bastion_key
+          fi
+          echo "Files in ~/.ssh:"
+          ls -la ~/.ssh
+          echo "Public key (first 1 line, safe to display):"
+          head -n 1 ~/.ssh/bastion_key.pub || true
+
+      - name: Setup OCI CLI config, keys, kubeconfig (write from secrets)
+        id: setup_config
+        env:
+          OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
+          OCI_KEY: ${{ secrets.OCI_KEY }}
+          KUBECONFIG_FILE: ${{ secrets.KUBECONFIG_FILE }}
+          BASTION_SSH_PRIVATE_KEY: ${{ secrets.BASTION_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          echo "Checking presence / lengths of key config secrets (lengths only, not content)"
+          echo "OCI_CONFIG length: ${#OCI_CONFIG}"
+          echo "OCI_KEY length: ${#OCI_KEY}"
+          echo "KUBECONFIG_FILE length: ${#KUBECONFIG_FILE}"
+          if [ -n "${BASTION_SSH_PRIVATE_KEY:-}" ]; then
+            echo "BASTION_SSH_PRIVATE_KEY is provided (will write to ~/.ssh/bastion_ssh_key)"
+          else
+            echo "No BASTION_SSH_PRIVATE_KEY secret provided — using generated ~/.ssh/bastion_key instead"
+          fi
+
+          mkdir -p ~/.oci ~/.ssh ~/.kube
+
+          # Write OCI config & key (do not echo contents)
+          if [ -n "${OCI_CONFIG}" ]; then
+            printf '%s' "$OCI_CONFIG" > ~/.oci/config
+            chmod 600 ~/.oci/config
+          else
+            echo "Warning: OCI_CONFIG secret appears empty"
+          fi
+
+          if [ -n "${OCI_KEY}" ]; then
+            printf '%s' "$OCI_KEY" > ~/.oci/key
+            chmod 400 ~/.oci/key
+          else
+            echo "Warning: OCI_KEY secret appears empty"
+          fi
+
+          if [ -n "${BASTION_SSH_PRIVATE_KEY:-}" ]; then
+            printf '%s' "$BASTION_SSH_PRIVATE_KEY" > ~/.ssh/bastion_ssh_key
+            chmod 600 ~/.ssh/bastion_ssh_key
+          fi
+
+          if [ -n "${KUBECONFIG_FILE}" ]; then
+            printf '%s' "$KUBECONFIG_FILE" > ~/.kube/config
+            chmod 600 ~/.kube/config
+          else
+            echo "Note: KUBECONFIG_FILE secret empty or not provided"
+          fi
+
+          echo "ls ~/.oci, ~/.ssh, ~/.kube"
+          ls -la ~/.oci || true
+          ls -la ~/.ssh || true
+          ls -la ~/.kube || true
+
+          echo "Quick OCI CLI connectivity test: list regions (if auth works this should return JSON)"
+          # This may fail if config or auth is wrong — don't exit in this quick test, but show output
+          if ! oci iam region list --raw-output; then
+            echo "Warning: 'oci iam region list' failed — likely an auth/config issue. Check ~/.oci/config & ~/.oci/key"
+          fi
+
+      - name: Verify required secrets are present
+        run: |
+          if [ -z "${{ secrets.BASTION_OCID }}" ]; then
+            echo "❌ Missing secret: BASTION_OCID"; exit 1
+          fi
+          if [ -z "${{ secrets.OKE_PRIVATE_IP }}" ]; then
+            echo "❌ Missing secret: OKE_PRIVATE_IP"; exit 1
+          fi
+          echo "✅ Required secrets exist (BASTION_OCID, OKE_PRIVATE_IP)."
+
+      - name: Create Bastion Session (with fallback debug)
+        id: bastion
+        env:
+          BASTION_OCID: ${{ secrets.BASTION_OCID }}
+          OKE_PRIVATE_IP: ${{ secrets.OKE_PRIVATE_IP }}
+        run: |
+          set -euo pipefail
+          echo "Creating bastion session (port-forwarding to target ${OKE_PRIVATE_IP}:6443)..."
+          if [ ! -f ~/.ssh/bastion_key.pub ]; then
+            echo "❌ Public key ~/.ssh/bastion_key.pub missing."
+            if [ -n "${{ secrets.BASTION_PUBLIC_KEY }}" ]; then
+              echo "Writing provided BASTION_PUBLIC_KEY to ~/.ssh/bastion_key.pub"
+              printf '%s' "${{ secrets.BASTION_PUBLIC_KEY }}" > ~/.ssh/bastion_key.pub
+              chmod 644 ~/.ssh/bastion_key.pub
+            else
+              echo "No public key available to send to OCI bastion. Either provide BASTION_PUBLIC_KEY secret or generate key earlier."
+              exit 1
+            fi
+          fi
+          ls -la ~/.ssh/bastion_key.pub
+
+          # Try once without --debug (clean output). Capture output & status,
+          # if it fails re-run with --debug so the logs show full diagnostic.
+          set +e
+          RAW_OUTPUT=$(oci bastion session create-port-forwarding \
+            --bastion-id "${BASTION_OCID}" \
+            --display-name "github-test-$(date +%s)" \
+            --target-private-ip "${OKE_PRIVATE_IP}" \
+            --target-port 6443 \
+            --session-ttl-in-seconds 1800 \
+            --ssh-public-key-file ~/.ssh/bastion_key.pub \
+            --query 'data.id' \
+            --raw-output 2>&1)
+          EXIT_CODE=$?
+          set -e
+
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "❌ 'oci bastion session create-port-forwarding' failed with exit code ${EXIT_CODE}."
+            echo "----- First-attempt output (truncated) -----"
+            echo "$RAW_OUTPUT" | sed -n '1,200p'
+            echo "----- Re-running with --debug to collect more details -----"
+            # Re-run with --debug so logs capture HTTP request/response and error detail
+            oci bastion session create-port-forwarding \
+              --bastion-id "${BASTION_OCID}" \
+              --display-name "github-test-debug-$(date +%s)" \
+              --target-private-ip "${OKE_PRIVATE_IP}" \
+              --target-port 6443 \
+              --session-ttl-in-seconds 1800 \
+              --ssh-public-key-file ~/.ssh/bastion_key.pub \
+              --query 'data.id' \
+              --raw-output \
+              --debug || true
+
+            echo "Exiting due to create-port-forwarding failure"
+            exit $EXIT_CODE
+          fi
+
+          # If successful, RAW_OUTPUT should contain the session OCID (clean)
+          SESSION_OCID=$(echo "$RAW_OUTPUT" | tail -n1)
+          echo "session_ocid=${SESSION_OCID}" >> $GITHUB_OUTPUT
+          echo "✅ Bastion session created: ${SESSION_OCID}"
+
+      - name: Wait for Session to be ACTIVE (poll)
+        env:
+          SESSION_OCID: ${{ steps.bastion.outputs.session_ocid }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for Bastion session ${SESSION_OCID} to reach ACTIVE state..."
+          STATE=""
+          for i in $(seq 1 30); do
+            STATE=$(oci bastion session get --session-id "${SESSION_OCID}" --query 'data."lifecycle-state"' --raw-output 2>/dev/null || true)
+            echo "Attempt $i: lifecycle-state='${STATE}'"
+            if [ "${STATE}" = "ACTIVE" ]; then
+              echo "✅ Session is ACTIVE"
+              break
+            fi
+            if [ "${STATE}" = "FAILED" ]; then
+              echo "❌ Session lifecycle is FAILED — printing detailed session object for debugging:"
+              oci bastion session get --session-id "${SESSION_OCID}" --debug || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+          if [ "${STATE}" != "ACTIVE" ]; then
+            echo "❌ Timeout waiting for session to become ACTIVE. Printing debug info:"
+            oci bastion session get --session-id "${SESSION_OCID}" --debug || true
+            exit 1
+          fi
+
+      - name: Get SSH metadata & parse connection details
+        id: ssh_details
+        env:
+          SESSION_OCID: ${{ steps.bastion.outputs.session_ocid }}
+        run: |
+          set -euo pipefail
+          echo "Retrieving SSH metadata for session ${SESSION_OCID}..."
+          SSH_COMMAND=$(oci bastion session get --session-id "${SESSION_OCID}" --query 'data."ssh-metadata".command' --raw-output)
+          echo "SSH Command (as returned by OCI):"
+          echo "$SSH_COMMAND"
+          echo "$SSH_COMMAND" > /tmp/ssh_command.txt
+
+          # Parse host, port, and session-user (the left side of @)
+          BASTION_HOST=$(echo "$SSH_COMMAND" | awk -F'@' '{print $2}' | awk '{print $1}')
+          # port is often provided with -p NNN
+          BASTION_PORT=$(echo "$SSH_COMMAND" | sed -n 's/.* -p \([0-9]*\).*/\1/p')
+          # parse the user/session identifier (left side of @)
+          SESSION_ID=$(echo "$SSH_COMMAND" | awk '{for(i=1;i<=NF;i++){ if ($i ~ /@/) { print $i; exit }}}' | cut -d'@' -f1)
+
+          echo "Parsed SSH details: host=${BASTION_HOST}, port=${BASTION_PORT}, session_id=${SESSION_ID}"
+          echo "bastion_host=${BASTION_HOST}" >> $GITHUB_OUTPUT
+          echo "bastion_port=${BASTION_PORT}" >> $GITHUB_OUTPUT
+          echo "session_id=${SESSION_ID}" >> $GITHUB_OUTPUT
+
+      - name: Test basic SSH connectivity to bastion
+        env:
+          BASTION_PORT: ${{ steps.ssh_details.outputs.bastion_port }}
+          BASTION_HOST: ${{ steps.ssh_details.outputs.bastion_host }}
+          SESSION_ID: ${{ steps.ssh_details.outputs.session_id }}
+        run: |
+          set -euo pipefail
+          echo "Running a basic SSH test to ${SESSION_ID}@${BASTION_HOST}:${BASTION_PORT} (will try simple test then verbose on failure)"
+          # quick test
+          if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/bastion_key -p "${BASTION_PORT}" "${SESSION_ID}@${BASTION_HOST}" "echo 'SSH quick test OK'"; then
+            echo "✅ SSH quick test succeeded"
+          else
+            echo "❌ SSH quick test failed — attempting verbose (-vvv) to gather debugging info"
+            ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/bastion_key -p "${BASTION_PORT}" "${SESSION_ID}@${BASTION_HOST}" "echo 'SSH verbose test (should show fail details)'" || true
+            exit 1
+          fi
+
+      - name: Create SSH tunnel (local 127.0.0.1:6443 -> OKE_PRIVATE_IP:6443)
+        env:
+          BASTION_PORT: ${{ steps.ssh_details.outputs.bastion_port }}
+          BASTION_HOST: ${{ steps.ssh_details.outputs.bastion_host }}
+          SESSION_ID: ${{ steps.ssh_details.outputs.session_id }}
+          OKE_PRIVATE_IP: ${{ secrets.OKE_PRIVATE_IP }}
+        run: |
+          set -euo pipefail
+          echo "Starting SSH tunnel: localhost:6443 -> ${OKE_PRIVATE_IP}:6443 via ${SESSION_ID}@${BASTION_HOST}:${BASTION_PORT}"
+          # Use ExitOnForwardFailure so SSH exits if it cannot forward
+          SSH_CMD="ssh -f -N -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i ~/.ssh/bastion_key -p ${BASTION_PORT} ${SESSION_ID}@${BASTION_HOST} -L 127.0.0.1:6443:${OKE_PRIVATE_IP}:6443"
+          echo "Running: ${SSH_CMD}"
+          eval "${SSH_CMD}"
+
+          echo "Waiting up to 10s for local port 6443 to be listening..."
+          for i in $(seq 1 10); do
+            if ss -ltn | grep -q ':6443'; then
+              echo "✅ Tunnel is listening on 127.0.0.1:6443"
+              break
+            fi
+            sleep 1
+          done
+          if ! ss -ltn | grep -q ':6443'; then
+            echo "❌ SSH tunnel startup failed. Current ssh processes:"
+            ps aux | grep ssh || true
+            echo "Last few lines of syslog (if available):"
+            tail -n 50 /var/log/syslog || true
+            exit 1
+          fi
+
+      - name: Test OKE API Connectivity (via tunnel)
+        run: |
+          set -euo pipefail
+          echo "Testing OKE API server via https://127.0.0.1:6443/version"
+          if curl -k --connect-timeout 10 --max-time 30 -sS https://127.0.0.1:6443/version; then
+            echo "✅ OKE API server reachable through tunnel"
+          else
+            echo "❌ Failed to reach OKE API server. Showing verbose curl output for debugging:"
+            curl -vk --connect-timeout 10 --max-time 30 https://127.0.0.1:6443/version || true
+            exit 1
+          fi
