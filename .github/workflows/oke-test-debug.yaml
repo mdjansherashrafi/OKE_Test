@@ -145,7 +145,7 @@ jobs:
             --display-name "github-test-$(date +%s)" \
             --target-private-ip "${OKE_PRIVATE_IP}" \
             --target-port 6443 \
-            --session-ttl-in-seconds 1800 \
+            --session-ttl 1800 \
             --ssh-public-key-file ~/.ssh/bastion_key.pub \
             --query 'data.id' \
             --raw-output 2>&1)
