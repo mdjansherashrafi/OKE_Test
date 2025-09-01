@@ -17,8 +17,24 @@ jobs:
     - name: Setup OCI CLI
       uses: oracle-actions/setup-oci@v1
       with:
-       oci-version: 'latest'
-    
+        oci-version: 'latest'
+        
+    - name: Configure OCI CLI
+      run: |
+        mkdir -p ~/.oci
+        oci setup config \
+          --user $OCI_USER_OCID \
+          --fingerprint $OCI_FINGERPRINT \
+          --tenancy $OCI_TENANCY_OCID \
+          --region $OCI_REGION \
+          --key-file <(echo "$OCI_PRIVATE_KEY")
+      env:
+        OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+        OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+        OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+        OCI_REGION: ${{ secrets.OCI_REGION }}
+        OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+
     - name: Generate SSH Key for Bastion
       run: |
         mkdir -p ~/.ssh
@@ -43,7 +59,7 @@ jobs:
         
         echo "session_ocid=${SESSION_OCID}" >> $GITHUB_OUTPUT
         echo "✅ Bastion session created: ${SESSION_OCID}"
-    
+
     - name: Wait for Session to be Active
       run: |
         SESSION_OCID="${{ steps.bastion.outputs.session_ocid }}"
@@ -72,7 +88,7 @@ jobs:
           echo "❌ Timeout waiting for session to become active"
           exit 1
         fi
-    
+
     - name: Get SSH Connection Details
       id: ssh_details
       run: |
@@ -98,7 +114,7 @@ jobs:
         echo "Bastion Host: ${BASTION_HOST}"
         echo "Bastion Port: ${BASTION_PORT}"
         echo "Session ID: ${SESSION_ID}"
-    
+
     - name: Test SSH Connection to Bastion
       run: |
         echo "Testing SSH connection to bastion..."
@@ -112,7 +128,7 @@ jobs:
           "echo 'SSH connection successful'"
         
         echo "✅ SSH connection to bastion works!"
-    
+
     - name: Create SSH Tunnel to OKE
       run: |
         echo "Creating SSH tunnel to OKE..."
@@ -138,7 +154,7 @@ jobs:
           echo "❌ SSH tunnel failed to start"
           exit 1
         fi
-    
+
     - name: Test OKE API Connectivity
       run: |
         echo "Testing OKE API connectivity..."
@@ -151,11 +167,3 @@ jobs:
           echo "❌ Failed to reach OKE API server"
           exit 1
         fi
-    
-    - name: Install kubectl
-      run: |
-        echo "Installing kubectl..."
-        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-        chmod +x kubectl
-        sudo mv kubectl /usr/local/bin/
-        kubectl version --client
