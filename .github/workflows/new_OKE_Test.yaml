@@ -31,11 +31,11 @@ jobs:
             --key-file <(echo "$OCI_PRIVATE_KEY")
 
         env:
-        OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
-        OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
-        OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
-        OCI_REGION: ${{ secrets.OCI_REGION }}
-        OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+         OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+         OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+         OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+         OCI_REGION: ${{ secrets.OCI_REGION }}
+         OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
 
       - name: Generate SSH Key for Bastion
         run: |
@@ -113,9 +113,9 @@ jobs:
             echo "bastion_port=${BASTION_PORT}" >> $GITHUB_OUTPUT  
             echo "session_id=${SESSION_ID}" >> $GITHUB_OUTPUT
         
-        echo "Bastion Host: ${BASTION_HOST}"
-        echo "Bastion Port: ${BASTION_PORT}"
-        echo "Session ID: ${SESSION_ID}"
+            echo "Bastion Host: ${BASTION_HOST}"
+            echo "Bastion Port: ${BASTION_PORT}"
+            echo "Session ID: ${SESSION_ID}"
 
       - name: Test SSH Connection to Bastion
         run: |
