@@ -1,4 +1,4 @@
-name: Test OKE_2 Connectivity
+  name: Test OKE_2 Connectivity
 
 on:
   workflow_dispatch:  # Manual trigger for testing
@@ -89,38 +89,24 @@ jobs:
         run: |
           SESSION_OCID="${{ steps.bastion.outputs.session_ocid }}"
 
-      - name: Get SSH Metadata
+      - name: k8s secrets validation non prod
+        env:
+          BASTION_KEY: ${{ secrets.BASTION_KEY }}
+          KUBECONFIG_FILE: ${{ secrets.KUBECONFIG_FILE }}
+          OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
+          OCI_KEY: ${{ secrets.OCI_KEY }}
+          BASTION_IP_ADDRESS: ${{ secrets.BASTION_IP_ADDRESS }}
+          OKE_IP_ADDRESS: ${{ secrets.OKE_IP_ADDRESS }}
         run: |
-          SSH_COMMAND=$(oci bastion session get \
-            --session-id ${SESSION_OCID} \
-            --query 'data."ssh-metadata".command' \
-            --raw-output)
-          echo "SSH Command: $SSH_COMMAND"
-          echo "SSH Command: ${SSH_COMMAND}"
-          BASTION_HOST=$(echo "${SSH_COMMAND}" | sed -n 's/.*@\([^[:space:]]*\).*/\1/p')
-          BASTION_PORT=$(echo "${SSH_COMMAND}" | sed -n 's/.*-p \([0-9]*\).*/\1/p')
-          SESSION_ID=$(echo "${SSH_COMMAND}" | sed -n 's/.*ssh \(.*\)@.*/\1/p')
-          echo "bastion_host=${BASTION_HOST}" >> $GITHUB_OUTPUT
-          echo "bastion_port=${BASTION_PORT}" >> $GITHUB_OUTPUT  
-          echo "session_id=${SESSION_ID}" >> $GITHUB_OUTPUT
-          echo "Bastion Host: ${BASTION_HOST}"
-          echo "Bastion Port: ${BASTION_PORT}"
-          echo "Session ID: ${SESSION_ID}"
-
-      - name: Test SSH Connection to Bastion
-        run: |
-          echo "Testing SSH connection to bastion..."
-
-      - name: Test basic SSH connectivity
-        run: |
-          timeout 30 ssh -i ~/.ssh/bastion_key \
-            -o StrictHostKeyChecking=no \
-            -o ConnectTimeout=10 \
-            -p ${{ steps.ssh_details.outputs.bastion_port }} \
-            ${{ steps.ssh_details.outputs.session_id }}@${{ steps.ssh_details.outputs.bastion_host }} \
-            "echo 'SSH connection successful'"
-          echo "✅ SSH connection to bastion works!"
-
+          ## Installation of binaries, set up .ssh and .kube dir
+          mkdir -p ~/.oci/ ~/.ssh/ ~/.kube/
+          echo "$OCI_CONFIG" > ~/.oci/config
+          echo "$OCI_KEY" > ~/.oci/key
+          echo "$BASTION_KEY" > ~/.ssh/bastion
+          echo "$KUBECONFIG_FILE" > ~/.kube/config
+          chmod 400 ~/.oci/key ~/.oci/config ~/.ssh/bastion
+          ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -f -n opc@${{ secrets.BASTION_IP_ADDRESS }} -i ~/.ssh/bastion -N -L 6443:${{ secrets.OKE_IP_ADDRESS }}:6443 sleep 900
+          ENV_ENABLE_BUILD_TEST=false ENV_VALIDATE_SEALED_SECRETS_ENABLED=true ./.github/workflows/lint-k8s-manifests.sh
       - name: Create SSH Tunnel to OKE
         run: |
           echo "Creating SSH tunnel to OKE..."
