@@ -3,7 +3,8 @@ name: Test OKE Connectivity
 on:
   workflow_dispatch:  # Manual trigger for testing
   push:
-    branches: master
+    branches:
+      - master
 
 jobs:
   test-oke-connection:
@@ -11,43 +12,44 @@ jobs:
     timeout-minutes: 10
     
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
     
-    - name: Setup OCI CLI
-      uses: oracle-actions/setup-oci@v1
-      with:
-        oci-version: 'latest'
-        
-    - name: Configure OCI CLI
-      run: |
-        mkdir -p ~/.oci
-        oci setup config \
-          --user $OCI_USER_OCID \
-          --fingerprint $OCI_FINGERPRINT \
-          --tenancy $OCI_TENANCY_OCID \
-          --region $OCI_REGION \
-          --key-file <(echo "$OCI_PRIVATE_KEY")
-      env:
+      - name: Setup OCI CLI
+        uses: oracle-oss/actions-setup-oci@v1
+        with:
+          oci-version: 'latest'
+    
+      - name: Configure OCI CLI
+        run: |
+          mkdir -p ~/.oci
+          oci setup config \
+            --user $OCI_USER_OCID \
+            --fingerprint $OCI_FINGERPRINT \
+            --tenancy $OCI_TENANCY_OCID \
+            --region $OCI_REGION \
+            --key-file <(echo "$OCI_PRIVATE_KEY")
+
+        env:
         OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
         OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
         OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
         OCI_REGION: ${{ secrets.OCI_REGION }}
         OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
 
-    - name: Generate SSH Key for Bastion
-      run: |
-        mkdir -p ~/.ssh
-        ssh-keygen -t rsa -b 2048 -f ~/.ssh/bastion_key -N "" -q
-        echo "SSH key generated"
-        ls -la ~/.ssh/
+      - name: Generate SSH Key for Bastion
+        run: |
+         mkdir -p ~/.ssh
+         ssh-keygen -t rsa -b 2048 -f ~/.ssh/bastion_key -N "" -q
+         echo "SSH key generated"
+         ls -la ~/.ssh/
     
-    - name: Create Bastion Session
-      id: bastion
-      run: |
-        echo "Creating bastion session..."
+      - name: Create Bastion Session
+        id: bastion
+        run: |
+         echo "Creating bastion session..."
         
-        SESSION_OCID=$(oci bastion session create-port-forwarding \
+         SESSION_OCID=$(oci bastion session create-port-forwarding \
           --bastion-id ${{ secrets.BASTION_OCID }} \
           --display-name "github-test-$(date +%s)" \
           --target-private-ip ${{ secrets.OKE_PRIVATE_IP }} \
@@ -57,15 +59,15 @@ jobs:
           --query 'data.id' \
           --raw-output)
         
-        echo "session_ocid=${SESSION_OCID}" >> $GITHUB_OUTPUT
-        echo "✅ Bastion session created: ${SESSION_OCID}"
+         echo "session_ocid=${SESSION_OCID}" >> $GITHUB_OUTPUT
+         echo "✅ Bastion session created: ${SESSION_OCID}"
 
-    - name: Wait for Session to be Active
-      run: |
-        SESSION_OCID="${{ steps.bastion.outputs.session_ocid }}"
-        echo "Waiting for session to become active..."
+      - name: Wait for Session to be Active
+        run: |
+         SESSION_OCID="${{ steps.bastion.outputs.session_ocid }}"
+         echo "Waiting for session to become active..."
         
-        for i in {1..30}; do
+         for i in {1..30}; do
           STATE=$(oci bastion session get \
             --session-id ${SESSION_OCID} \
             --query 'data."lifecycle-state"' \
@@ -82,88 +84,74 @@ jobs:
           fi
           
           sleep 10
-        done
+          done
         
-        if [ "${STATE}" != "ACTIVE" ]; then
+         if [ "${STATE}" != "ACTIVE" ]; then
           echo "❌ Timeout waiting for session to become active"
           exit 1
-        fi
+         fi
 
-    - name: Get SSH Connection Details
-      id: ssh_details
-      run: |
-        SESSION_OCID="${{ steps.bastion.outputs.session_ocid }}"
+      - name: Get SSH Connection Details
+        id: ssh_details
+        run: |
+         SESSION_OCID="${{ steps.bastion.outputs.session_ocid }}"
         
-        # Get SSH metadata
-        SSH_COMMAND=$(oci bastion session get \
-          --session-id ${SESSION_OCID} \
-          --query 'data."ssh-metadata".command' \
-          --raw-output)
+      - name: Get SSH Metadata
+        run: |
+          SSH_COMMAND=$(oci bastion session get \
+            --session-id ${SESSION_OCID} \
+            --query 'data."ssh-metadata".command' \
+            --raw-output)
+          echo "SSH Command: $SSH_COMMAND"
+          echo "SSH Command: ${SSH_COMMAND}"
+     
+            BASTION_HOST=$(echo "${SSH_COMMAND}" | sed -n 's/.*@\([^[:space:]]*\).*/\1/p')
+            BASTION_PORT=$(echo "${SSH_COMMAND}" | sed -n 's/.*-p \([0-9]*\).*/\1/p')
+            SESSION_ID=$(echo "${SSH_COMMAND}" | sed -n 's/.*ssh \(.*\)@.*/\1/p')
         
-        echo "SSH Command: ${SSH_COMMAND}"
-        
-        # Parse connection details
-        BASTION_HOST=$(echo "${SSH_COMMAND}" | sed -n 's/.*@\([^[:space:]]*\).*/\1/p')
-        BASTION_PORT=$(echo "${SSH_COMMAND}" | sed -n 's/.*-p \([0-9]*\).*/\1/p')
-        SESSION_ID=$(echo "${SSH_COMMAND}" | sed -n 's/.*ssh \(.*\)@.*/\1/p')
-        
-        echo "bastion_host=${BASTION_HOST}" >> $GITHUB_OUTPUT
-        echo "bastion_port=${BASTION_PORT}" >> $GITHUB_OUTPUT  
-        echo "session_id=${SESSION_ID}" >> $GITHUB_OUTPUT
+            echo "bastion_host=${BASTION_HOST}" >> $GITHUB_OUTPUT
+            echo "bastion_port=${BASTION_PORT}" >> $GITHUB_OUTPUT  
+            echo "session_id=${SESSION_ID}" >> $GITHUB_OUTPUT
         
         echo "Bastion Host: ${BASTION_HOST}"
         echo "Bastion Port: ${BASTION_PORT}"
         echo "Session ID: ${SESSION_ID}"
 
-    - name: Test SSH Connection to Bastion
-      run: |
-        echo "Testing SSH connection to bastion..."
+      - name: Test SSH Connection to Bastion
+        run: |
+         echo "Testing SSH connection to bastion..."
         
-        # Test basic SSH connectivity
-        timeout 30 ssh -i ~/.ssh/bastion_key \
-          -o StrictHostKeyChecking=no \
-          -o ConnectTimeout=10 \
-          -p ${{ steps.ssh_details.outputs.bastion_port }} \
-          ${{ steps.ssh_details.outputs.session_id }}@${{ steps.ssh_details.outputs.bastion_host }} \
-          "echo 'SSH connection successful'"
+      - name: Test basic SSH connectivity
+        run: |
+          timeout 30 ssh -i ~/.ssh/bastion_key \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=10 \
+            -p ${{ steps.ssh_details.outputs.bastion_port }} \
+            ${{ steps.ssh_details.outputs.session_id }}@${{ steps.ssh_details.outputs.bastion_host }} \
+            "echo 'SSH connection successful'"
         
-        echo "✅ SSH connection to bastion works!"
+            echo "✅ SSH connection to bastion works!"
 
-    - name: Create SSH Tunnel to OKE
-      run: |
-        echo "Creating SSH tunnel to OKE..."
+      - name: Create SSH Tunnel to OKE
+        run: |
+         echo "Creating SSH tunnel to OKE..."
         
-        # Start SSH tunnel in background
-        ssh -i ~/.ssh/bastion_key \
-          -o StrictHostKeyChecking=no \
-          -o LogLevel=ERROR \
-          -f -N \
-          -L 6443:${{ secrets.OKE_PRIVATE_IP }}:6443 \
-          -p ${{ steps.ssh_details.outputs.bastion_port }} \
-          ${{ steps.ssh_details.outputs.session_id }}@${{ steps.ssh_details.outputs.bastion_host }}
-        
-        echo "SSH tunnel started"
-        
-        # Wait a moment for tunnel to establish
-        sleep 5
-        
-        # Check if tunnel is working
-        if netstat -tln | grep -q ":6443"; then
+         echo "SSH tunnel started"
+            
+               if netstat -tln | grep -q ":6443"; then
           echo "✅ SSH tunnel is listening on port 6443"
-        else
-          echo "❌ SSH tunnel failed to start"
-          exit 1
-        fi
+          else
+            echo "❌ SSH tunnel failed to start"
+            exit 1
+           fi
 
-    - name: Test OKE API Connectivity
-      run: |
-        echo "Testing OKE API connectivity..."
-        
-        # Test basic connectivity to OKE API server
-        if curl -k --connect-timeout 10 --max-time 30 \
-           -s https://localhost:6443/version; then
+      - name: Test OKE API Connectivity
+        run: |
+         echo "Testing OKE API connectivity..."
+            if curl -k --connect-timeout 10 --max-time 30 \
+            -s https://localhost:6443/version; then
           echo "✅ OKE API server is reachable!"
-        else
+         else
           echo "❌ Failed to reach OKE API server"
           exit 1
-        fi
+         fi
