@@ -1,4 +1,4 @@
-name: Test OKE_1 Connectivity
+name: Test OKE_2 Connectivity
 
 on:
   workflow_dispatch:  # Manual trigger for testing
@@ -30,6 +30,11 @@ jobs:
 
       - name: Setup CLI and config
         run: |
+          # Debug: Print variable lengths to ensure they are set
+          echo "OCI_CONFIG is set: ${#OCI_CONFIG}"
+          echo "OCI_KEY is set: ${#OCI_KEY}"
+          echo "BASTION_KEY is set: ${#BASTION_KEY}"
+          echo "KUBECONFIG_FILE is set: ${#KUBECONFIG_FILE}"
           set -x
           mkdir -p ~/.oci ~/.ssh ~/.kube
           echo "$OCI_CONFIG" > ~/.oci/config || exit 1
