@@ -1,4 +1,4 @@
-name: Test OKE Connectivity
+name: Test OKE_1 Connectivity
 
 on:
   workflow_dispatch:  # Manual trigger for testing
@@ -154,4 +154,4 @@ jobs:
          else
           echo "❌ Failed to reach OKE API server"
           exit 1
-         fi
+           fi
