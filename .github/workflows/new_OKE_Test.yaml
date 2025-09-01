@@ -7,7 +7,7 @@ on:
 
 jobs:
   test-oke-connection:
-    runs-on: ubuntu 24.05
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     
     steps:
