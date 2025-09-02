@@ -28,11 +28,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
-          # If the repo/secret supplies a public key, prefer it (secret name: BASTION_PUBLIC_KEY).
-          if [ -n "${{ secrets.BASTION_PUBLIC_KEY }}" ]; then
-            echo "Using BASTION_PUBLIC_KEY secret to create ~/.ssh/bastion_key.pub"
-            printf '%s' "${{ secrets.BASTION_PUBLIC_KEY }}" > ~/.ssh/bastion_key.pub
-            chmod 644 ~/.ssh/bastion_key.pub
+          printf '%s\n' "${{ secrets.BASTION_PRIVATE_KEY }}" > ~/.ssh/bastion_key
+          printf '%s\n' "${{ secrets.BASTION_PUBLIC_KEY }}" > ~/.ssh/bastion_key.pub
+          chmod 600 ~/.ssh/bastion_key
+          chmod 644 ~/.ssh/bastion_key.pub
           else
             echo "No BASTION_PUBLIC_KEY secret provided — generating an ephemeral keypair at ~/.ssh/bastion_key"
             if [ ! -f ~/.ssh/bastion_key ]; then
