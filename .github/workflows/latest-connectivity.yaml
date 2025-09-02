@@ -1,4 +1,4 @@
-name: latest OKE Connectivity
+name: latest OKE_NEW Connectivity
 
 on:
   workflow_dispatch:
@@ -6,11 +6,11 @@ on:
 jobs:
   check-oke-connection:
     runs-on: ubuntu-24.04
-  env:
-  BASTION_OCID: ${{ secrets.BASTION_OCID }}
-  OCI_TARGET_RESOURCE_ID: ${{ secrets.OCI_TARGET_RESOURCE_ID }}
+    env:
+       BASTION_OCID: ${{ secrets.BASTION_OCID }}
+       OCI_TARGET_RESOURCE_ID: ${{ secrets.OCI_TARGET_RESOURCE_ID }}
 
-steps:
+    steps:
        - name: Setup CLI and config
          run: |
           mkdir -p ~/.oci ~/.ssh ~/.kube
