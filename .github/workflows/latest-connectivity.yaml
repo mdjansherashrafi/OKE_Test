@@ -26,19 +26,19 @@ steps:
           ssh-keygen -y -f ~/.ssh/bastion_key
           echo "SSH command: $SSH_CMD -i ~/.ssh/bastion_key -vvv"
           chmod 400 ~/.oci/key ~/.ssh/bastion_key ~/.kube/config
-        env:
+         env:
           OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
           OCI_KEY: ${{ secrets.OCI_KEY }}
           BASTION_KEY: ${{ secrets.BASTION_KEY }}
           KUBECONFIG_FILE: ${{ secrets.KUBECONFIG_FILE }}
 
-      - name: Install OCI CLI
-        run: |
+       - name: Install OCI CLI
+         run: |
           curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh | bash -s -- --accept-all-defaults
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      - name: Start OCI Bastion session and tunnel
-        run: |
+       - name: Start OCI Bastion session and tunnel
+         run: |
           SESSION_ID=$(oci bastion session create-port-forwarding \
             --bastion-id ${{ secrets.BASTION_OCID }} \
             --target-resource-id ${{ secrets.OKE_NODE_OCID }} \
@@ -50,6 +50,17 @@ steps:
             --query "data.id" --raw-output)
 
           echo "SESSION_ID=$SESSION_ID"
+       - name: Start Bastion tunnel
+         run: |
+          nohup ssh -i ~/.ssh/bastion_key \
+          -o StrictHostKeyChecking=no \
+          -L 2222:${TARGET_PRIVATE_IP}:22 \
+          ${SESSION_ID}@${BASTION_HOST} &
+          sleep 5
+          
+       - name: Test SSH via tunnel
+         run: |
+          ssh -i ~/.ssh/target_key -p 2222 opc@127.0.0.1 "echo 'SSH via bastion OK'"
 
           SSH_CMD=$(oci bastion session get --session-id $SESSION_ID \
             --query "data.ssh_metadata.ssh_command" --raw-output)
@@ -61,8 +72,8 @@ steps:
           $SSH_CMD -i ~/.ssh/bastion_key -v
           echo "✅ Tunnel established"
 
-      - name: Check OKE cluster connectivity
-        run: |
+       - name: Check OKE cluster connectivity
+         run: |
           export KUBECONFIG=~/.kube/config
           if kubectl get nodes; then
             echo "✅ Connected to OKE cluster"
