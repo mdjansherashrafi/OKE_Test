@@ -1,4 +1,4 @@
-name: Test OKE_2 Connectivity
+name: Test OKE_3 Connectivity
 
 on:
   workflow_dispatch:
