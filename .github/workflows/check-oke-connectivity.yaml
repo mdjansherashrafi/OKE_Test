@@ -58,7 +58,7 @@ jobs:
           export KUBECONFIG=~/.kube/config
           # Attempt to get cluster nodes
           if kubectl get nodes; then
-            echo "✅ Connected to OKE cluster"
+            echo "✅ Connected to OKE cluster1"
           else
             echo "❌ Failed to connect to OKE cluster"
             exit 1
