@@ -1,0 +1,37 @@
+name: OCI Bastion SSH Tunnel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bastion-ssh:
+    runs-on: ubuntu-latest
+
+    env:
+      BASTION_HOST: ocid1.bastionsession.oc1.me-jeddah-1.amaaaaaailso3naa2njmj7y2dsuo4ramykaf2xwjg7tborttc5antncbzana@host.bastion.me-jeddah-1.oci.oraclecloud.com
+      TARGET_PRIVATE_IP: 172.19.3.144
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # ✅ Setup SSH keys from GitHub secrets
+      - name: Configure SSH keys
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.BASTION_PRIVATE_KEY }}" > ~/.ssh/bastion_key
+          echo "${{ secrets.TARGET_PRIVATE_KEY }}" > ~/.ssh/target_key
+          chmod 600 ~/.ssh/bastion_key ~/.ssh/target_key
+
+      # ✅ Start Bastion tunnel
+      - name: Start Bastion tunnel
+        run: |
+          nohup ssh -i ~/.ssh/bastion_key \
+            -o StrictHostKeyChecking=no \
+            -L 2222:${TARGET_PRIVATE_IP}:22 \
+            ${SESSION_ID}@${BASTION_HOST} &
+          sleep 5
+
+      # ✅ Test SSH through the tunnel
+      - name: Test SSH via tunnel
+        run: |
+          ssh -i ~/.ssh/target_key -p 2222 opc@127.0.0.1 "echo '✅ SSH via bastion OK'"
