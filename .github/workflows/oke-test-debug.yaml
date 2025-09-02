@@ -14,6 +14,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Create OCI API key file
+        run: |
+         mkdir -p ~/.oci
+         echo "${{ secrets.OCI_API_KEY }}" > ~/.oci/oci_api_key
+         chmod 600 ~/.oci/oci_api_key
 
       - name: Install utilities & OCI CLI
         run: |
