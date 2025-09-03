@@ -1,4 +1,4 @@
-name: Check OKE Connectivity
+name: Check OKE_1 Connectivity
 
 on:
   workflow_dispatch:  # Manual trigger
