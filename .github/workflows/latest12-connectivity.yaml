@@ -1,4 +1,4 @@
-name: latest OKE_NEW Connectivity
+name: latest OKE_NEW12 Connectivity
 
 on:
   workflow_dispatch:
