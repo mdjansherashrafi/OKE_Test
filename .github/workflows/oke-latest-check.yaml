@@ -22,21 +22,13 @@ jobs:
           chmod 600 ~/.oci/oci_api_key
 
       # Install kubeseal, kubeval, gomplate, kube-score, OCI tools if cache not found
-      - name: Install kubeseal, kubeval, gomplate, kube-score, OCI
-        if: steps.kubeseal-kubeval-gomplate-kubescore-oci-cache.outputs.cache-hit != 'true'
-        working-directory: .github/workflows
-        env:
-         ENV_INSTALL_KUBESEAL: true
-         ENV_INSTALL_KUBEVAL: true
-         ENV_INSTALL_GOMPLATE: true
-         ENV_INSTALL_KUBESCORE: true
-         ENV_INSTALL_OCI: true
+      - name: Create Oconnection
         run: |
-         mkdir -p ~/.oci/ ~/.ssh/ ~/.kube/
-         echo "$OCI_CONFIG" > ~/.oci/config
-         echo "$OCI_KEY" > ~/.oci/key
-         echo "$BASTION_KEY" > ~/.ssh/bastion
-         echo "$KUBECONFIG_FILE" > ~/.kube/config
-         chmod 400 ~/.oci/key ~/.oci/config ~/.ssh/bastion
-         ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -f -n opc@${{ secrets.BASTION_IP_ADDRESS }} -i ~/.ssh/bastion -N -L 6443:${{ secrets.OKE_IP_ADDRESS }}:6443 sleep 900
-         ENV_ENABLE_BUILD_TEST=false ENV_VALIDATE_SEALED_SECRETS_ENABLED=true ./.github/workflows/lint-k8s-manifests.sh
+          mkdir -p ~/.oci/ ~/.ssh/ ~/.kube/
+          echo "$OCI_CONFIG" > ~/.oci/config
+          echo "$OCI_KEY" > ~/.oci/key
+          echo "$BASTION_KEY" > ~/.ssh/bastion
+          echo "$KUBECONFIG_FILE" > ~/.kube/config
+          chmod 400 ~/.oci/key ~/.oci/config ~/.ssh/bastion
+          ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -f -n opc@${{ secrets.BASTION_IP_ADDRESS }} -i ~/.ssh/bastion -N -L 6443:${{ secrets.OKE_IP_ADDRESS }}:6443 sleep 900
+          ENV_ENABLE_BUILD_TEST=false ENV_VALIDATE_SEALED_SECRETS_ENABLED=true ./.github/workflows/lint-k8s-manifests.sh
