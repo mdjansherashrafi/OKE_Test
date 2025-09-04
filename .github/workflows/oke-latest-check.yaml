@@ -14,14 +14,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Create OCI API key file
         run: |
-         mkdir -p ~/.oci
-         echo "${{ secrets.OCI_API_KEY }}" > ~/.oci/oci_api_key
-         chmod 600 ~/.oci/oci_api_key
-#  Install kubeseal if was not found in cache
-      - name: install kubeseal, kubeval, gomplate, kube-score, oci
-        run: |
+          mkdir -p ~/.oci
+          echo "${{ secrets.OCI_API_KEY }}" > ~/.oci/oci_api_key
+          chmod 600 ~/.oci/oci_api_key
+
+      # Install kubeseal, kubeval, gomplate, kube-score, OCI tools if cache not found
+      - name: Install kubeseal, kubeval, gomplate, kube-score, OCI
         if: steps.kubeseal-kubeval-gomplate-kubescore-oci-cache.outputs.cache-hit != 'true'
         working-directory: .github/workflows
         env:
@@ -30,18 +31,7 @@ jobs:
           ENV_INSTALL_GOMPLATE: true
           ENV_INSTALL_KUBESCORE: true
           ENV_INSTALL_OCI: true
-    
-
-      - name: k8s secrets validation non prod
-        env:
-          BASTION_KEY: ${{ secrets.BASTION_KEY }}
-          KUBECONFIG_FILE: ${{ secrets.KUBECONFIG_FILE }}
-          OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
-          OCI_KEY: ${{ secrets.OCI_KEY }}
-          BASTION_IP_ADDRESS: ${{ secrets.BASTION_IP_ADDRESS }}
-          OKE_IP_ADDRESS: ${{ secrets.OKE_IP_ADDRESS }}
         run: |
-          ## Installation of binaries, set up .ssh and .kube dir
           mkdir -p ~/.oci/ ~/.ssh/ ~/.kube/
           echo "$OCI_CONFIG" > ~/.oci/config
           echo "$OCI_KEY" > ~/.oci/key
