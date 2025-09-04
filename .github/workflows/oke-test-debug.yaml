@@ -246,9 +246,10 @@ jobs:
           BASTION_PORT: ${{ steps.ssh_details.outputs.bastion_port }}
           BASTION_HOST: ${{ steps.ssh_details.outputs.bastion_host }}
           SESSION_ID: ${{ steps.ssh_details.outputs.session_id }}
+
+      - name: 'Create new SSH tunnel to access private k8s'
         run: |
-          set -euo pipefail
-          echo "Running a basic SSH test to ${SESSION_ID}@${BASTION_HOST}:${BASTION_PORT} (will try simple test then verbose on failure)"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -N -L 6443:${{ env.CLUSTER_PRIVATE_IP }}:6443 -p 22 ${{ env.PORT_FORWARDING_OCID }}@ost.bastion.me-jeddah-1.oci.oraclecloud.com &
           # quick test
           if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/bastion_key -p "${BASTION_PORT}" "${SESSION_ID}@${BASTION_HOST}" "echo 'SSH quick test OK'"; then
             echo "✅ SSH quick test succeeded"
