@@ -294,4 +294,24 @@ jobs:
             echo "   - Token expired"
             exit 1
           fi
+          # verification of OKE connectivity
+      - name: Verify OKE cluster with kubectl
+        env:
+          KUBECONFIG: $HOME/.kube/config
+        run: |
+          set -euo pipefail
+          echo "Checking Kubernetes client version:"
+          kubectl version --client=true
+
+          echo "Testing cluster access (kubectl get nodes)..."
+          if kubectl --kubeconfig $KUBECONFIG --server https://127.0.0.1:6443 get nodes -o wide; then
+            echo "✅ Successfully connected to OKE and listed nodes"
+          else
+            echo "❌ Failed to authenticate to OKE. Common causes:"
+            echo "   - KUBECONFIG_FILE secret not valid"
+            echo "   - IAM principal not mapped to Kubernetes RBAC"
+            echo "   - Token expired"
+            exit 1
+          fi
+
 
