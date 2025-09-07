@@ -1,0 +1,184 @@
+name: Test OKE_3 Connectivity
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+jobs:
+  test-oke-connection:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create OCI API key file
+        run: |
+          mkdir -p ~/.oci
+          echo "${{ secrets.OCI_API_KEY }}" > ~/.oci/oci_api_key
+          chmod 600 ~/.oci/oci_api_key
+
+      - name: Install utilities & OCI CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip jq net-tools iproute2 openssh-client curl
+          pip3 install --upgrade oci-cli
+          oci --version
+
+      - name: Prepare / optionally generate SSH key for Bastion
+        id: prepare_ssh
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          if [ -n "${{ secrets.BASTION_PUBLIC_KEY }}" ]; then
+            printf '%s\n' "${{ secrets.BASTION_PRIVATE_KEY }}" > ~/.ssh/bastion_key
+            printf '%s\n' "${{ secrets.BASTION_PUBLIC_KEY }}" > ~/.ssh/bastion_key.pub
+            chmod 600 ~/.ssh/bastion_key
+            chmod 644 ~/.ssh/bastion_key.pub
+          else
+            if [ ! -f ~/.ssh/bastion_key ]; then
+              ssh-keygen -t rsa -b 2048 -f ~/.ssh/bastion_key -N "" -q
+            fi
+            chmod 600 ~/.ssh/bastion_key
+          fi
+
+      - name: Setup OCI CLI config, keys, kubeconfig (write from secrets)
+        id: setup_config
+        env:
+          OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
+          OCI_KEY: ${{ secrets.OCI_KEY }}
+          KUBECONFIG_FILE: ${{ secrets.KUBECONFIG_FILE }}
+          BASTION_SSH_PRIVATE_KEY: ${{ secrets.BASTION_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.oci ~/.ssh ~/.kube
+
+          if [ -n "${OCI_CONFIG}" ]; then
+            printf '%s' "$OCI_CONFIG" > ~/.oci/config
+            chmod 600 ~/.oci/config
+          fi
+
+          if [ -n "${OCI_KEY}" ]; then
+            printf '%s' "$OCI_KEY" > ~/.oci/key
+            chmod 400 ~/.oci/key
+          fi
+
+          if [ -n "${BASTION_SSH_PRIVATE_KEY:-}" ]; then
+            printf '%s' "$BASTION_SSH_PRIVATE_KEY" > ~/.ssh/bastion_ssh_key
+            chmod 600 ~/.ssh/bastion_ssh_key
+          fi
+
+          if [ -n "${KUBECONFIG_FILE}" ]; then
+            printf '%s' "$KUBECONFIG_FILE" > ~/.kube/config
+            chmod 600 ~/.kube/config
+          fi
+
+      - name: Verify required secrets are present
+        run: |
+          if [ -z "${{ secrets.BASTION_OCID }}" ]; then
+            exit 1
+          fi
+          if [ -z "${{ secrets.OKE_PRIVATE_IP }}" ]; then
+            exit 1
+          fi
+
+      - name: Create Bastion Session
+        id: bastion
+        env:
+          BASTION_OCID: ${{ secrets.BASTION_OCID }}
+          OKE_PRIVATE_IP: ${{ secrets.OKE_PRIVATE_IP }}
+        run: |
+          set -euo pipefail
+          if [ ! -f ~/.ssh/bastion_key.pub ]; then
+            printf '%s' "${{ secrets.BASTION_PUBLIC_KEY }}" > ~/.ssh/bastion_key.pub
+            chmod 644 ~/.ssh/bastion_key.pub
+          fi
+
+          SESSION_OCID=$(oci bastion session create-port-forwarding \
+            --bastion-id "${BASTION_OCID}" \
+            --display-name "github-test-$(date +%s)" \
+            --target-private-ip "${OKE_PRIVATE_IP}" \
+            --target-port 6443 \
+            --session-ttl 1800 \
+            --ssh-public-key-file ~/.ssh/bastion_key.pub \
+            --query 'data.id' \
+            --raw-output)
+
+          echo "session_ocid=${SESSION_OCID}" >> $GITHUB_OUTPUT
+
+      - name: Wait for Session to be ACTIVE
+        env:
+          SESSION_OCID: ${{ steps.bastion.outputs.session_ocid }}
+        run: |
+          set -euo pipefail
+          STATE=""
+          for i in $(seq 1 30); do
+            STATE=$(oci bastion session get --session-id "${SESSION_OCID}" --query 'data."lifecycle-state"' --raw-output || true)
+            if [ "${STATE}" = "ACTIVE" ]; then
+              break
+            fi
+            if [ "${STATE}" = "FAILED" ]; then
+              exit 1
+            fi
+            sleep 5
+          done
+
+          if [ "${STATE}" != "ACTIVE" ]; then
+            exit 1
+          fi
+
+      - name: Get SSH metadata & parse connection details
+        id: ssh_details
+        env:
+          SESSION_OCID: ${{ steps.bastion.outputs.session_ocid }}
+        run: |
+          set -euo pipefail
+          SSH_COMMAND=$(oci bastion session get --session-id "${SESSION_OCID}" --query 'data."ssh-metadata".command' --raw-output)
+          echo "$SSH_COMMAND" > /tmp/ssh_command.txt
+
+          BASTION_HOST=$(echo "$SSH_COMMAND" | awk -F'@' '{print $2}' | awk '{print $1}')
+          BASTION_PORT=$(echo "$SSH_COMMAND" | sed -n 's/.* -p \([0-9]*\).*/\1/p')
+          SESSION_ID=$(echo "$SSH_COMMAND" | awk '{for(i=1;i<=NF;i++){ if ($i ~ /@/) { print $i; exit }}}' | cut -d'@' -f1)
+
+          echo "bastion_host=${BASTION_HOST}" >> $GITHUB_OUTPUT
+          echo "bastion_port=${BASTION_PORT}" >> $GITHUB_OUTPUT
+          echo "session_id=${SESSION_ID}" >> $GITHUB_OUTPUT
+
+      - name: Create SSH tunnel (local 127.0.0.1:6443 -> OKE_PRIVATE_IP:6443)
+        env:
+          BASTION_PORT: ${{ steps.ssh_details.outputs.bastion_port }}
+          BASTION_HOST: ${{ steps.ssh_details.outputs.bastion_host }}
+          SESSION_ID: ${{ steps.ssh_details.outputs.session_id }}
+          OKE_PRIVATE_IP: ${{ secrets.OKE_PRIVATE_IP }}
+        run: |
+          set -euo pipefail
+          SSH_CMD="ssh -f -N -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i ~/.ssh/bastion_key -p ${BASTION_PORT} ${SESSION_ID}@${BASTION_HOST} -L 127.0.0.1:6443:${OKE_PRIVATE_IP}:6443"
+          eval "${SSH_CMD}"
+
+          for i in $(seq 1 10); do
+            if ss -ltn | grep -q ':6443'; then
+              break
+            fi
+            sleep 1
+          done
+          if ! ss -ltn | grep -q ':6443'; then
+            exit 1
+          fi
+
+      - name: Test OKE API Connectivity (via tunnel)
+        run: |
+          set -euo pipefail
+          if ! curl -k --connect-timeout 10 --max-time 30 -sS https://127.0.0.1:6443/version; then
+            exit 1
+          fi
+
+      - name: Verify OKE cluster with kubectl
+        env:
+          KUBECONFIG: $HOME/.kube/config
+        run: |
+          set -euo pipefail
+          kubectl version --client=true
+          kubectl --kubeconfig $KUBECONFIG --server https://127.0.0.1:6443 get nodes -o wide
