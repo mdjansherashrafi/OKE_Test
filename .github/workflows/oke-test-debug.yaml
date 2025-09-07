@@ -14,11 +14,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Create OCI API key file
         run: |
-         mkdir -p ~/.oci
-         echo "${{ secrets.OCI_API_KEY }}" > ~/.oci/oci_api_key
-         chmod 600 ~/.oci/oci_api_key
+          mkdir -p ~/.oci
+          echo "${{ secrets.OCI_API_KEY }}" > ~/.oci/oci_api_key
+          chmod 600 ~/.oci/oci_api_key
 
       - name: Install utilities & OCI CLI
         run: |
@@ -34,18 +35,18 @@ jobs:
           set -euo pipefail
           mkdir -p ~/.ssh
           if [ -n "${{ secrets.BASTION_PUBLIC_KEY }}" ]; then
-          printf '%s\n' "${{ secrets.BASTION_PRIVATE_KEY }}" > ~/.ssh/bastion_key
-          printf '%s\n' "${{ secrets.BASTION_PUBLIC_KEY }}" > ~/.ssh/bastion_key.pub
-          chmod 600 ~/.ssh/bastion_key
-          chmod 644 ~/.ssh/bastion_key.pub
+            printf '%s\n' "${{ secrets.BASTION_PRIVATE_KEY }}" > ~/.ssh/bastion_key
+            printf '%s\n' "${{ secrets.BASTION_PUBLIC_KEY }}" > ~/.ssh/bastion_key.pub
+            chmod 600 ~/.ssh/bastion_key
+            chmod 644 ~/.ssh/bastion_key.pub
           else
-          echo "No BASTION_PUBLIC_KEY secret provided — generating an ephemeral keypair at ~/.ssh/bastion_key"
-          if [ ! -f ~/.ssh/bastion_key ]; then
-          ssh-keygen -t rsa -b 2048 -f ~/.ssh/bastion_key -N "" -q
-          else
-          echo "~/.ssh/bastion_key already exists — keeping it"
-          fi
-          chmod 600 ~/.ssh/bastion_key
+            echo "No BASTION_PUBLIC_KEY secret provided — generating an ephemeral keypair at ~/.ssh/bastion_key"
+            if [ ! -f ~/.ssh/bastion_key ]; then
+              ssh-keygen -t rsa -b 2048 -f ~/.ssh/bastion_key -N "" -q
+            else
+              echo "~/.ssh/bastion_key already exists — keeping it"
+            fi
+            chmod 600 ~/.ssh/bastion_key
           fi
           echo "Files in ~/.ssh:"
           ls -la ~/.ssh
@@ -142,12 +143,6 @@ jobs:
           fi
           ls -la ~/.ssh/bastion_key.pub
 
-      - name: Configure SSH key
-        run: |
-         mkdir -p ~/.ssh
-         echo "${{ secrets.BASTION_PRIVATE_KEY }}" > ~/.ssh/bastion_key
-         chmod 600 ~/.ssh/bastion_key
-
           # Try once without --debug (clean output). Capture output & status,
           # if it fails re-run with --debug so the logs show full diagnostic.
           set +e
@@ -168,7 +163,6 @@ jobs:
             echo "----- First-attempt output (truncated) -----"
             echo "$RAW_OUTPUT" | sed -n '1,200p'
             echo "----- Re-running with --debug to collect more details -----"
-            # Re-run with --debug so logs capture HTTP request/response and error detail
             oci bastion session create-port-forwarding \
               --bastion-id "${BASTION_OCID}" \
               --display-name "github-test-debug-$(date +%s)" \
@@ -240,24 +234,6 @@ jobs:
           echo "bastion_host=${BASTION_HOST}" >> $GITHUB_OUTPUT
           echo "bastion_port=${BASTION_PORT}" >> $GITHUB_OUTPUT
           echo "session_id=${SESSION_ID}" >> $GITHUB_OUTPUT
-
-      - name: Test basic SSH connectivity to bastion
-        env:
-          BASTION_PORT: ${{ steps.ssh_details.outputs.bastion_port }}
-          BASTION_HOST: ${{ steps.ssh_details.outputs.bastion_host }}
-          SESSION_ID: ${{ steps.ssh_details.outputs.session_id }}
-
-      - name: 'Create new SSH tunnel to access private k8s'
-        run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -N -L 6443:${{ env.CLUSTER_PRIVATE_IP }}:6443 -p 22 ${{ env.PORT_FORWARDING_OCID }}@ost.bastion.me-jeddah-1.oci.oraclecloud.com &
-          # quick test
-          if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/bastion_key -p "${BASTION_PORT}" "${SESSION_ID}@${BASTION_HOST}" "echo 'SSH quick test OK'"; then
-            echo "✅ SSH quick test succeeded"
-          else
-            echo "❌ SSH quick test failed — attempting verbose (-vvv) to gather debugging info"
-            ssh -vvv -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/bastion_key -p "${BASTION_PORT}" "${SESSION_ID}@${BASTION_HOST}" "echo 'SSH verbose test (should show fail details)'" || true
-            exit 1
-          fi
 
       - name: Create SSH tunnel (local 127.0.0.1:6443 -> OKE_PRIVATE_IP:6443)
         env:
