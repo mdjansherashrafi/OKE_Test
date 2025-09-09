@@ -155,7 +155,7 @@ jobs:
           OKE_PRIVATE_IP: ${{ secrets.OKE_PRIVATE_IP }}
         run: |
           set -euo pipefail
-          SSH_CMD="ssh -f -N -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i ~/.ssh/bastion_key -p ${BASTION_PORT} ${SESSION_ID}@${BASTION_HOST} -L 127.0.0.1:6443:${OKE_PRIVATE_IP}:6443"
+          SSH_CMD="ssh -f -N -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i ~/.ssh/oci_bastion_key -p ${BASTION_PORT} ${SESSION_ID}@${BASTION_HOST} -L 127.0.0.1:6443:${OKE_PRIVATE_IP}:6443"
           eval "${SSH_CMD}"
 
           for i in $(seq 1 10); do
