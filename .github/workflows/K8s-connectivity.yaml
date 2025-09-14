@@ -147,15 +147,7 @@ jobs:
           echo "bastion_port=${BASTION_PORT}" >> $GITHUB_OUTPUT
           echo "session_id=${SESSION_ID}" >> $GITHUB_OUTPUT
 
-      - name: Create SSH tunnel (local 127.0.0.1:6443 -> OKE_PRIVATE_IP:6443)
-        env:
-          BASTION_PORT: ${{ steps.ssh_details.outputs.bastion_port }}
-          BASTION_HOST: ${{ steps.ssh_details.outputs.bastion_host }}
-          SESSION_ID: ${{ steps.ssh_details.outputs.session_id }}
-          OKE_PRIVATE_IP: ${{ secrets.OKE_PRIVATE_IP }}
-        run: |
-          set -euo pipefail
-          SSH_CMD="ssh -f -N -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -i ~/.ssh/oci_bastion_key -p ${BASTION_PORT} ${SESSION_ID}@${BASTION_HOST} -L 127.0.0.1:6443:${OKE_PRIVATE_IP}:6443"
+          SSH_CMD="ssh ... -i ~/.ssh/bastion_ssh_key ..."
           eval "${SSH_CMD}"
 
           for i in $(seq 1 10); do
